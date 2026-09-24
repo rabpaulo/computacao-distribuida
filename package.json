@@ -1,0 +1,38 @@
+{
+  "name": "districommerce",
+  "version": "1.0.0",
+  "description": "DistriCommerce - Plataforma de E-Commerce Distribuída",
+  "private": true,
+  "workspaces": [
+    "services/*",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "gateway:dev": "npm --workspace=services/api-gateway run dev",
+    "users:dev": "npm --workspace=services/users-service run dev",
+    "products:dev": "npm --workspace=services/products-service run dev",
+    "orders:dev": "npm --workspace=services/orders-service run dev",
+    "frontend:dev": "npm --workspace=frontend run dev",
+    "gateway:build": "npm --workspace=services/api-gateway run build",
+    "users:build": "npm --workspace=services/users-service run build",
+    "products:build": "npm --workspace=services/products-service run build",
+    "orders:build": "npm --workspace=services/orders-service run build",
+    "frontend:build": "npm --workspace=frontend run build",
+    "compose:up": "docker compose up --build -d",
+    "compose:down": "docker compose down",
+    "compose:logs": "docker compose logs -f"
+  },
+  "keywords": [
+    "distributed-systems",
+    "microservices",
+    "ecommerce",
+    "typescript",
+    "react",
+    "docker",
+    "kubernetes"
+  ],
+  "author": "DistriCommerce Team",
+  "license": "MIT"
+}

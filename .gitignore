@@ -1,0 +1,40 @@
+# Dependências
+node_modules/
+.pnp
+.pnp.js
+
+# Build / Transpilação
+dist/
+build/
+*.tsbuildinfo
+
+# Variáveis de ambiente
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Cobertura e Testes
+coverage/
+.nyc_output/
+
+# IDE e Editores
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+
+# Bancos de dados locais / Volumes temporários
+data/
+*.sqlite

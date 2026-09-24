@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: districommerce
+
+resources:
+  - namespace.yaml
+  - configmaps/common-config.yaml
+  - secrets/common-secrets.yaml
+  - databases/postgres.yaml
+  - databases/mongodb.yaml
+  - services/users-service.yaml
+  - services/products-service.yaml
+  - services/orders-service.yaml
+  - services/api-gateway.yaml
+  - services/frontend.yaml
+  - ingress.yaml

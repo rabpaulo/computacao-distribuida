@@ -1,0 +1,176 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # 1. Banco de Dados Relacional (Usuários, Autenticação e Pedidos - ACID)
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: districommerce-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: districommerce_users
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d districommerce_users"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - districommerce-network
+
+  # ============================================================================
+  # 2. Banco de Dados NoSQL (Catálogo de Produtos - Documentos e Flexibilidade)
+  # ============================================================================
+  mongodb:
+    image: mongo:7.0
+    container_name: districommerce-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+      MONGO_INITDB_DATABASE: districommerce_products
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - districommerce-network
+
+  # ============================================================================
+  # 3. Microsserviço de Usuários (TypeScript / Express / PostgreSQL / JWT)
+  # ============================================================================
+  users-service:
+    build:
+      context: ./services/users-service
+      dockerfile: Dockerfile
+    container_name: districommerce-users-service
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgrespassword
+      DB_NAME: districommerce_users
+      JWT_SECRET: districommerce-users-secret-jwt-key-minimum-length
+      JWT_EXPIRES_IN: 24h
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - districommerce-network
+
+  # ============================================================================
+  # 4. Microsserviço de Produtos (TypeScript / Express / MongoDB)
+  # ============================================================================
+  products-service:
+    build:
+      context: ./services/products-service
+      dockerfile: Dockerfile
+    container_name: districommerce-products-service
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+      NODE_ENV: production
+      MONGODB_URI: mongodb://root:rootpassword@mongodb:27017/districommerce_products?authSource=admin
+      JWT_SECRET: districommerce-users-secret-jwt-key-minimum-length
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - districommerce-network
+
+  # ============================================================================
+  # 5. Microsserviço de Pedidos e Checkout (TypeScript / Express / PostgreSQL)
+  # ============================================================================
+  orders-service:
+    build:
+      context: ./services/orders-service
+      dockerfile: Dockerfile
+    container_name: districommerce-orders-service
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      PORT: 3003
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgrespassword
+      DB_NAME: districommerce_users
+      PRODUCTS_SERVICE_URL: http://products-service:3002
+      JWT_SECRET: districommerce-users-secret-jwt-key-minimum-length
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - districommerce-network
+
+  # ============================================================================
+  # 6. API Gateway (TypeScript / Express Proxy - Ponto Central de Entrada)
+  # ============================================================================
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: districommerce-api-gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: 8000
+      NODE_ENV: production
+      USERS_SERVICE_URL: http://users-service:3001
+      PRODUCTS_SERVICE_URL: http://products-service:3002
+      ORDERS_SERVICE_URL: http://orders-service:3003
+      CLIENT_ORIGIN: "*"
+    depends_on:
+      - users-service
+      - products-service
+      - orders-service
+    networks:
+      - districommerce-network
+
+  # ============================================================================
+  # 7. Frontend Cliente (React 18 / TypeScript / Vite / Nginx)
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: districommerce-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+    networks:
+      - districommerce-network
+
+volumes:
+  postgres_data:
+    name: districommerce_postgres_data
+  mongodb_data:
+    name: districommerce_mongodb_data
+
+networks:
+  districommerce-network:
+    name: districommerce-network
+    driver: bridge

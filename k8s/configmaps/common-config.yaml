@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: districommerce-config
+  namespace: districommerce
+data:
+  NODE_ENV: "production"
+  # Users Service
+  USERS_SERVICE_PORT: "3001"
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_USER: "postgres"
+  DB_NAME: "districommerce_users"
+  JWT_EXPIRES_IN: "24h"
+  # Products Service
+  PRODUCTS_SERVICE_PORT: "3002"
+  MONGODB_URI: "mongodb://root:rootpassword@mongodb:27017/districommerce_products?authSource=admin"

@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-service
+  namespace: districommerce
+  labels:
+    app: orders-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: orders-service
+  template:
+    metadata:
+      labels:
+        app: orders-service
+    spec:
+      containers:
+        - name: orders-service
+          image: districommerce/orders-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3003
+              name: http
+          env:
+            - name: PORT
+              value: "3003"
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: NODE_ENV
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_PORT
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_USER
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_NAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: POSTGRES_PASSWORD
+            - name: PRODUCTS_SERVICE_URL
+              value: "http://products-service:3002"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: JWT_SECRET
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3003
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders-service
+  namespace: districommerce
+  labels:
+    app: orders-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3003
+      targetPort: 3003
+      name: http
+  selector:
+    app: orders-service

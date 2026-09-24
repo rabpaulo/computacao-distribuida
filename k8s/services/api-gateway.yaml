@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: districommerce
+  labels:
+    app: api-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: districommerce/api-gateway:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: PORT
+              value: "8000"
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: NODE_ENV
+            - name: USERS_SERVICE_URL
+              value: "http://users-service:3001"
+            - name: PRODUCTS_SERVICE_URL
+              value: "http://products-service:3002"
+            - name: ORDERS_SERVICE_URL
+              value: "http://orders-service:3003"
+            - name: CLIENT_ORIGIN
+              value: "*"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: districommerce
+  labels:
+    app: api-gateway
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
+  selector:
+    app: api-gateway
