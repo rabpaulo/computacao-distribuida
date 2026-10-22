@@ -1,8 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
+import jwt from 'jsonwebtoken';
 import { pool } from '../config/database';
 import { env } from '../config/env';
-import { Order, OrderItem } from '../models/order.model';
+import { Order, OrderItem, OrderStatus } from '../models/order.model';
 import { AppError } from '../middlewares/error.middleware';
+import { orderPublisher } from '../messaging/order.publisher';
 
 export interface CreateOrderItemDTO {
   productId: string;
@@ -55,9 +57,10 @@ export class OrderService {
       await client.query('BEGIN');
 
       const orderId = uuidv4();
+      // Nasce PENDING e so muda quando o pagamento responder pela fila
       const insertOrderQuery = `
         INSERT INTO orders (id, user_id, total_amount, status)
-        VALUES ($1, $2, $3, 'CONFIRMED')
+        VALUES ($1, $2, $3, 'PENDING')
         RETURNING id, user_id, total_amount, status, created_at, updated_at
       `;
       const orderRes = await client.query(insertOrderQuery, [
@@ -89,7 +92,7 @@ export class OrderService {
 
       await client.query('COMMIT');
 
-      return {
+      const order: Order = {
         id: createdOrder.id,
         user_id: createdOrder.user_id,
         total_amount: Number(createdOrder.total_amount),
@@ -98,11 +101,106 @@ export class OrderService {
         updated_at: createdOrder.updated_at,
         items: itemsList,
       };
+
+      // So publica depois do COMMIT, senao o payments-service pode pegar
+      // um pedido que acabou em ROLLBACK
+      await orderPublisher.publishOrderCreated(order);
+
+      return order;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();
+    }
+  }
+
+  // Aplica o resultado do pagamento que chegou pela fila.
+  // O WHERE status = 'PENDING' deixa a operacao idempotente: se o broker
+  // reentregar a mesma mensagem, o UPDATE nao pega nada e nada muda.
+  async applyPaymentResult(
+    orderId: string,
+    status: Extract<OrderStatus, 'CONFIRMED' | 'CANCELLED'>,
+    reason?: string
+  ): Promise<boolean> {
+    const query = `
+      UPDATE orders
+      SET status = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2 AND status = 'PENDING'
+      RETURNING id
+    `;
+    const result = await pool.query(query, [status, orderId]);
+
+    if (result.rowCount === 0) {
+      return false;
+    }
+
+    if (status === 'CANCELLED') {
+      console.warn(
+        `[orders-service] Pedido ${orderId} cancelado por recusa de pagamento` +
+          (reason ? `: ${reason}` : '.')
+      );
+      // O estoque foi reservado no checkout, antes do pagamento. Como o
+      // pagamento nao passou, precisamos devolver as unidades.
+      await this.restoreStock(orderId);
+    }
+
+    return true;
+  }
+
+  // Devolve ao catalogo as unidades reservadas por um pedido cancelado.
+  // Best-effort: se o products-service estiver fora, registra e segue, senao
+  // o pedido ficaria preso num estado inconsistente so por causa disso.
+  private async restoreStock(orderId: string): Promise<void> {
+    const itemsRes = await pool.query(
+      'SELECT product_id, product_name, quantity FROM order_items WHERE order_id = $1',
+      [orderId]
+    );
+
+    if (itemsRes.rowCount === 0) {
+      return;
+    }
+
+    // Aqui nao existe usuario logado, a chamada vem do consumidor da fila.
+    // Entao o proprio servico assina um token curto com o segredo
+    // compartilhado para falar com o products-service.
+    const serviceToken = jwt.sign(
+      { userId: 'orders-service', email: 'orders-service@districommerce', role: 'ROLE_ADMIN' },
+      env.JWT_SECRET,
+      { expiresIn: '5m' }
+    );
+
+    for (const item of itemsRes.rows) {
+      try {
+        const res = await fetch(
+          `${env.PRODUCTS_SERVICE_URL}/api/v1/products/${item.product_id}/stock`,
+          {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${serviceToken}`,
+            },
+            body: JSON.stringify({ delta: item.quantity }),
+          }
+        );
+
+        if (!res.ok) {
+          console.warn(
+            `[orders-service] products-service recusou a devolucao de ${item.quantity}x ` +
+              `"${item.product_name}" (HTTP ${res.status})`
+          );
+          continue;
+        }
+
+        console.log(
+          `[orders-service] Devolvido ao estoque: ${item.quantity}x "${item.product_name}"`
+        );
+      } catch (err: any) {
+        console.warn(
+          `[orders-service] Falha ao devolver estoque de "${item.product_name}":`,
+          err.message
+        );
+      }
     }
   }
 

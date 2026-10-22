@@ -148,7 +148,7 @@ Coleção `products`:
 
 ## 6. Próximas Entregas e Evolução da Plataforma
 
-- **Semanas 3-4:** Implementação do API Gateway centralizado, Mensageria assíncrona (RabbitMQ/Kafka) e Frontend Cliente em React.
+- **Semanas 3-4:** Implementação do API Gateway centralizado, Mensageria assíncrona (RabbitMQ/Kafka) e Frontend Cliente em React. **[CONCLUÍDO]** Mensageria implementada com RabbitMQ (AMQP 0-9-1): o `orders-service` publica `order.created` e o `payments-service` responde com `payment.approved`/`payment.rejected`, com retentativa atrasada via fila-TTL, Dead Letter Queue e consumo idempotente. Detalhes na seção "Mensageria Assíncrona" do README e no `docs/ROTEIRO-DE-TESTES.md`.
 - **Semanas 5-6:** Resiliência com Circuit Breaker, Pagamento assíncrono e Rastreamento de entregas IoT via MQTT.
 - **Semana 7:** Pipeline de CI/CD (GitHub Actions), Monitoramento Prometheus/Grafana e Testes de Carga.
 - **Semana 8:** Documentação final consolidada e demonstração completa.

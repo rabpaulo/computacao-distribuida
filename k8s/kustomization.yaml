@@ -9,9 +9,11 @@ resources:
   - secrets/common-secrets.yaml
   - databases/postgres.yaml
   - databases/mongodb.yaml
+  - messaging/rabbitmq.yaml
   - services/users-service.yaml
   - services/products-service.yaml
   - services/orders-service.yaml
+  - services/payments-service.yaml
   - services/api-gateway.yaml
   - services/frontend.yaml
   - ingress.yaml

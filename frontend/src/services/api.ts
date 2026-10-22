@@ -148,6 +148,7 @@ export const api = {
           { name: 'users-service', url: 'http://localhost:3001', status: 'OFFLINE' },
           { name: 'products-service', url: 'http://localhost:3002', status: 'OFFLINE' },
           { name: 'orders-service', url: 'http://localhost:3003', status: 'OFFLINE' },
+          { name: 'payments-service', url: 'http://localhost:3004', status: 'OFFLINE' },
         ],
       };
     }

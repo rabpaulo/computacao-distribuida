@@ -1795,6 +1795,34 @@ input, select, textarea {
   border: 1px solid var(--success-border);
 }
 
+/* Pedido esperando o resultado do pagamento */
+.status-badge.status-pending {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  border: 1px solid var(--warning-border);
+}
+
+/* Pagamento recusado */
+.status-badge.status-cancelled {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  border: 1px solid var(--danger-border);
+}
+
+/* Faixa de aviso no topo do historico */
+.orders-async-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  color: var(--warning-text);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-sm);
+}
+
 .order-items-table {
   background: #ffffff;
   border-radius: var(--radius-sm);

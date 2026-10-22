@@ -62,6 +62,26 @@ spec:
                 secretKeyRef:
                   name: districommerce-secrets
                   key: JWT_SECRET
+            - name: RABBITMQ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: RABBITMQ_URL
+            - name: RABBITMQ_PREFETCH
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: RABBITMQ_PREFETCH
+            - name: RABBITMQ_MAX_RETRIES
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: RABBITMQ_MAX_RETRIES
+            - name: RABBITMQ_RETRY_DELAY_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: RABBITMQ_RETRY_DELAY_MS
           resources:
             requests:
               cpu: 50m
