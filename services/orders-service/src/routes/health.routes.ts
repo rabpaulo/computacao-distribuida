@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { checkDatabaseHealth } from '../config/database';
+import { broker } from '../messaging';
 
 const router = Router();
 
@@ -14,21 +15,26 @@ router.get('/health', (_req: Request, res: Response) => {
 
 router.get('/ready', async (_req: Request, res: Response) => {
   const dbHealthy = await checkDatabaseHealth();
+  const brokerHealthy = broker.isHealthy();
 
   if (!dbHealthy) {
     res.status(503).json({
       status: 'DOWN',
       service: 'orders-service',
       database: 'DISCONNECTED',
+      messaging: brokerHealthy ? 'CONNECTED' : 'DISCONNECTED',
       timestamp: new Date().toISOString(),
     });
     return;
   }
 
-  res.status(200).json({
-    status: 'READY',
+  // Broker fora nao derruba o servico, so deixa ele capenga: da pra
+  // consultar pedido, mas os novos ficam parados em PENDING
+  res.status(brokerHealthy ? 200 : 207).json({
+    status: brokerHealthy ? 'READY' : 'DEGRADED',
     service: 'orders-service',
     database: 'CONNECTED',
+    messaging: brokerHealthy ? 'CONNECTED' : 'DISCONNECTED',
     timestamp: new Date().toISOString(),
   });
 });

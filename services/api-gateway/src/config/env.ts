@@ -9,6 +9,7 @@ const envSchema = z.object({
   USERS_SERVICE_URL: z.string().default('http://localhost:3001'),
   PRODUCTS_SERVICE_URL: z.string().default('http://localhost:3002'),
   ORDERS_SERVICE_URL: z.string().default('http://localhost:3003'),
+  PAYMENTS_SERVICE_URL: z.string().default('http://localhost:3004'),
   CLIENT_ORIGIN: z.string().default('*'),
 });
 

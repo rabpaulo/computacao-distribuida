@@ -42,7 +42,7 @@ export class OrderController {
 
       res.status(201).json({
         status: 'success',
-        message: 'Pedido realizado com sucesso',
+        message: 'Pedido registrado. Pagamento em processamento assíncrono.',
         data: { order },
       });
     } catch (error) {

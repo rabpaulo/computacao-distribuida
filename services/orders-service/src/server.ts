@@ -1,12 +1,22 @@
 import { createApp } from './app';
 import { env } from './config/env';
 import { initDatabase, pool } from './config/database';
+import { broker } from './messaging';
+import { registerPaymentConsumer } from './messaging/payment.consumer';
 
 async function bootstrap() {
   try {
     console.log(`[orders-service] Inicializando serviço em ambiente: ${env.NODE_ENV}...`);
 
     await initDatabase();
+
+    // Conecta em background, senao o boot fica preso esperando o broker
+    void broker
+      .connect()
+      .then(() => registerPaymentConsumer())
+      .catch((err) =>
+        console.error('[orders-service] Falha ao inicializar mensageria:', err)
+      );
 
     const app = createApp();
 
@@ -18,6 +28,7 @@ async function bootstrap() {
       console.log(`[orders-service] Sinal ${signal} recebido. Encerrando conexões...`);
       server.close(async () => {
         try {
+          await broker.close();
           await pool.end();
           console.log('[orders-service] Conexões fechadas com sucesso.');
           process.exit(0);

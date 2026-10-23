@@ -15,3 +15,14 @@ data:
   # Products Service
   PRODUCTS_SERVICE_PORT: "3002"
   MONGODB_URI: "mongodb://root:rootpassword@mongodb:27017/districommerce_products?authSource=admin"
+  # Orders Service
+  ORDERS_SERVICE_PORT: "3003"
+  # Payments Service (consumidor assincrono)
+  PAYMENTS_SERVICE_PORT: "3004"
+  PAYMENT_LATENCY_MS: "2000"
+  PAYMENT_FAILURE_RATE: "0.3"
+  PAYMENT_MAX_AMOUNT: "50000"
+  # Mensageria (RabbitMQ / AMQP 0-9-1)
+  RABBITMQ_PREFETCH: "10"
+  RABBITMQ_MAX_RETRIES: "3"
+  RABBITMQ_RETRY_DELAY_MS: "5000"

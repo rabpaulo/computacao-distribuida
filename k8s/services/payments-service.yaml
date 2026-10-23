@@ -1,0 +1,145 @@
+# ==============================================================================
+# payments-service - Consumidor assincrono de pagamentos
+#
+# Nao recebe trafego do checkout: reage ao evento `order.created` publicado
+# pelo orders-service na fila `payments.order-created`. O HTTP exposto serve
+# apenas para consulta de pagamentos e para os probes do Kubernetes.
+#
+# Escalar replicas aumenta o paralelismo de consumo: o RabbitMQ distribui as
+# mensagens entre os consumidores (competing consumers), e o indice unico em
+# payments.order_id garante que nenhum pedido seja cobrado duas vezes.
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-service
+  namespace: districommerce
+  labels:
+    app: payments-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payments-service
+  template:
+    metadata:
+      labels:
+        app: payments-service
+    spec:
+      containers:
+        - name: payments-service
+          image: districommerce/payments-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3004
+              name: http
+          env:
+            - name: PORT
+              value: "3004"
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: NODE_ENV
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_PORT
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_USER
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_NAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: POSTGRES_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: JWT_SECRET
+            - name: RABBITMQ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: RABBITMQ_URL
+            - name: RABBITMQ_PREFETCH
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: RABBITMQ_PREFETCH
+            - name: RABBITMQ_MAX_RETRIES
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: RABBITMQ_MAX_RETRIES
+            - name: RABBITMQ_RETRY_DELAY_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: RABBITMQ_RETRY_DELAY_MS
+            - name: PAYMENT_LATENCY_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: PAYMENT_LATENCY_MS
+            - name: PAYMENT_FAILURE_RATE
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: PAYMENT_FAILURE_RATE
+            - name: PAYMENT_MAX_AMOUNT
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: PAYMENT_MAX_AMOUNT
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3004
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            # /ready retorna 503 sem conexao com o broker: sem fila, este
+            # servico nao tem funcao.
+            httpGet:
+              path: /ready
+              port: 3004
+            initialDelaySeconds: 20
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payments-service
+  namespace: districommerce
+  labels:
+    app: payments-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3004
+      targetPort: 3004
+      name: http
+  selector:
+    app: payments-service
