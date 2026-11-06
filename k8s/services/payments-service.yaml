@@ -91,21 +91,51 @@ spec:
                 configMapKeyRef:
                   name: districommerce-config
                   key: RABBITMQ_RETRY_DELAY_MS
-            - name: PAYMENT_LATENCY_MS
-              valueFrom:
-                configMapKeyRef:
-                  name: districommerce-config
-                  key: PAYMENT_LATENCY_MS
-            - name: PAYMENT_FAILURE_RATE
-              valueFrom:
-                configMapKeyRef:
-                  name: districommerce-config
-                  key: PAYMENT_FAILURE_RATE
             - name: PAYMENT_MAX_AMOUNT
               valueFrom:
                 configMapKeyRef:
                   name: districommerce-config
                   key: PAYMENT_MAX_AMOUNT
+            - name: PAYPAL_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: PAYPAL_BASE_URL
+            - name: PAYPAL_CURRENCY
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: PAYPAL_CURRENCY
+            - name: PAYPAL_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: PAYPAL_CLIENT_ID
+            - name: PAYPAL_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: PAYPAL_CLIENT_SECRET
+            - name: CB_FAILURE_RATE_THRESHOLD
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: CB_FAILURE_RATE_THRESHOLD
+            - name: CB_MINIMUM_CALLS
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: CB_MINIMUM_CALLS
+            - name: CB_RESET_TIMEOUT_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: CB_RESET_TIMEOUT_MS
+            - name: CB_CALL_TIMEOUT_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: CB_CALL_TIMEOUT_MS
           resources:
             requests:
               cpu: 50m

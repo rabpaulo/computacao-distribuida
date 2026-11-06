@@ -20,13 +20,23 @@ const envSchema = z.object({
   RABBITMQ_MAX_RETRIES: z.coerce.number().int().nonnegative().default(3),
   RABBITMQ_RETRY_DELAY_MS: z.coerce.number().int().positive().default(5000),
 
-  // Como nao temos gateway de pagamento de verdade, simulamos um aqui.
-  // Latencia artificial, so pra dar tempo de ver o pedido em PENDING
-  PAYMENT_LATENCY_MS: z.coerce.number().int().nonnegative().default(2000),
-  // Chance de falhar e cair no retry. Use 0 se quiser resultado previsivel
-  PAYMENT_FAILURE_RATE: z.coerce.number().min(0).max(1).default(0.3),
+  // Gateway PayPal simulado (services/paypal-mock imita a API REST v2).
+  // Nada aqui fala com o PayPal de verdade.
+  PAYPAL_BASE_URL: z.string().default('http://localhost:3006'),
+  PAYPAL_CLIENT_ID: z.string().default('districommerce-sandbox-client'),
+  PAYPAL_CLIENT_SECRET: z.string().default('districommerce-sandbox-secret'),
+  PAYPAL_CURRENCY: z.string().length(3).default('BRL'),
+
   // Acima disso o pagamento e recusado de vez, sem tentar de novo
   PAYMENT_MAX_AMOUNT: z.coerce.number().positive().default(50000),
+
+  // Circuit Breaker (vale para todas as dependencias HTTP do servico)
+  CB_SLIDING_WINDOW_SIZE: z.coerce.number().int().positive().default(10),
+  CB_MINIMUM_CALLS: z.coerce.number().int().positive().default(5),
+  CB_FAILURE_RATE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.5),
+  CB_RESET_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
+  CB_HALF_OPEN_MAX_CALLS: z.coerce.number().int().positive().default(2),
+  CB_CALL_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
 });
 
 export const env = envSchema.parse(process.env);

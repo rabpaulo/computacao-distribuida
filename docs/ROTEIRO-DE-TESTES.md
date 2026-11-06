@@ -1,5 +1,15 @@
 # Roteiro de Testes — Mensageria Assíncrona (Entrega 2)
 
+> **Atualização (semanas 5-6):** o pagamento agora passa pelo PayPal simulado e
+> espera o comprador aprovar em "Meus Pedidos" — nos cenários 1 e 2, clique em
+> **Pagar com PayPal → Aprovar** depois do checkout. A falha aleatória do
+> gateway (`PAYMENT_FAILURE_RATE`/`PAYMENT_LATENCY_MS`) saiu do
+> `payments-service` e virou `PAYPAL_FAILURE_RATE`/`PAYPAL_LATENCY_MS` no
+> `paypal-mock`; para os cenários 3 e 6 use o modo caos
+> (`curl -X POST localhost:3006/__admin/chaos -H 'Content-Type: application/json' -d '{"mode":"error"}'`).
+> Circuit breaker, PayPal e IoT estão em
+> **[ROTEIRO-DE-TESTES-ENTREGA-3.md](ROTEIRO-DE-TESTES-ENTREGA-3.md)**.
+
 Guia para validar a integração com RabbitMQ sem precisar conhecer o código.
 Cada cenário diz o que fazer, o que deve acontecer e onde olhar.
 

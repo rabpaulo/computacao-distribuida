@@ -5,6 +5,8 @@ import { env } from '../config/env';
 import { Order, OrderItem, OrderStatus } from '../models/order.model';
 import { AppError } from '../middlewares/error.middleware';
 import { orderPublisher } from '../messaging/order.publisher';
+import { adjustStock, StockConflictError } from '../clients/products.client';
+import { CircuitOpenError } from '../resilience/circuit-breaker';
 
 export interface CreateOrderItemDTO {
   productId: string;
@@ -29,27 +31,9 @@ export class OrderService {
       0
     );
 
-    // Se houver token, tenta atualizar o estoque no products-service
+    // Reserva o estoque no products-service antes de gravar o pedido
     if (authToken) {
-      for (const item of data.items) {
-        try {
-          const res = await fetch(`${env.PRODUCTS_SERVICE_URL}/api/v1/products/${item.productId}/stock`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${authToken}`,
-            },
-            body: JSON.stringify({ delta: -item.quantity }),
-          });
-
-          if (!res.ok && res.status === 409) {
-            throw new AppError(409, `Estoque insuficiente para o produto "${item.productName}"`);
-          }
-        } catch (err: any) {
-          if (err instanceof AppError) throw err;
-          console.warn(`[orders-service] Aviso: Não foi possível atualizar estoque no products-service:`, err.message);
-        }
-      }
+      await this.reserveStock(data.items, authToken);
     }
 
     const client = await pool.connect();
@@ -172,17 +156,7 @@ export class OrderService {
 
     for (const item of itemsRes.rows) {
       try {
-        const res = await fetch(
-          `${env.PRODUCTS_SERVICE_URL}/api/v1/products/${item.product_id}/stock`,
-          {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${serviceToken}`,
-            },
-            body: JSON.stringify({ delta: item.quantity }),
-          }
-        );
+        const res = await adjustStock(item.product_id, item.quantity, serviceToken);
 
         if (!res.ok) {
           console.warn(
@@ -202,6 +176,75 @@ export class OrderService {
         );
       }
     }
+  }
+
+  // Reserva item a item. Se um item nao tiver estoque, devolve o que ja foi
+  // reservado dos anteriores (compensacao) e recusa o pedido.
+  //
+  // Se o products-service estiver fora (ou o circuit breaker aberto), o
+  // fallback e seguir com o checkout sem reserva: a venda nao para por causa
+  // do catalogo. Com o breaker aberto isso acontece na hora, sem esperar o
+  // timeout de cada item.
+  private async reserveStock(items: CreateOrderItemDTO[], authToken: string): Promise<void> {
+    const reserved: CreateOrderItemDTO[] = [];
+
+    for (const item of items) {
+      try {
+        const res = await adjustStock(item.productId, -item.quantity, authToken);
+        if (res.ok) reserved.push(item);
+      } catch (err: any) {
+        if (err instanceof StockConflictError) {
+          await this.releaseReserved(reserved, authToken);
+          throw new AppError(409, `Estoque insuficiente para o produto "${item.productName}"`);
+        }
+
+        const motivo =
+          err instanceof CircuitOpenError
+            ? 'circuit breaker aberto'
+            : err.message;
+        console.warn(
+          `[orders-service] Fallback: pedido segue sem reserva de "${item.productName}" (${motivo})`
+        );
+      }
+    }
+  }
+
+  private async releaseReserved(items: CreateOrderItemDTO[], authToken: string): Promise<void> {
+    for (const item of items) {
+      try {
+        await adjustStock(item.productId, item.quantity, authToken);
+      } catch (err: any) {
+        console.warn(
+          `[orders-service] Falha ao desfazer reserva de "${item.productName}":`,
+          err.message
+        );
+      }
+    }
+  }
+
+  // Carrega o pedido com itens, sem checagem de dono. Uso interno (eventos).
+  async findWithItems(orderId: string): Promise<Order | null> {
+    const orderRes = await pool.query(
+      `SELECT id, user_id, total_amount, status, created_at, updated_at FROM orders WHERE id = $1`,
+      [orderId]
+    );
+    if (orderRes.rows.length === 0) return null;
+
+    const row = orderRes.rows[0];
+    const itemsRes = await pool.query(
+      `SELECT id, order_id, product_id, product_name, price, quantity FROM order_items WHERE order_id = $1`,
+      [orderId]
+    );
+
+    return {
+      id: row.id,
+      user_id: row.user_id,
+      total_amount: Number(row.total_amount),
+      status: row.status,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      items: itemsRes.rows.map((it) => ({ ...it, price: Number(it.price) })),
+    };
   }
 
   async getMyOrders(userId: string): Promise<Order[]> {

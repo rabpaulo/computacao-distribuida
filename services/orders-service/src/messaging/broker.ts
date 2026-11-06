@@ -3,13 +3,14 @@ import { randomUUID } from 'node:crypto';
 import {
   ERROR_HEADER,
   EXCHANGES,
+  ORIGINAL_ROUTING_KEY_HEADER,
   QUEUES,
   RETRY_COUNT_HEADER,
   ROUTING_KEYS,
 } from './config';
 
-// Cliente RabbitMQ usado pelo orders-service e pelo payments-service.
-// O arquivo e o mesmo nos dois de proposito: se a topologia divergir entre
+// Cliente RabbitMQ usado pelo orders-service, payments-service e
+// logistics-service. O arquivo e o mesmo nos tres de proposito: se a topologia divergir entre
 // as pontas, a declaracao da fila conflita e o servico nem sobe.
 
 type Connection = Awaited<ReturnType<typeof amqp.connect>>;
@@ -155,7 +156,7 @@ export class RabbitBroker {
     await channel.bindQueue(
       QUEUES.PAYMENTS_ORDER_CREATED_RETRY,
       EXCHANGES.RETRY,
-      ROUTING_KEYS.ORDER_CREATED
+      QUEUES.PAYMENTS_ORDER_CREATED
     );
 
     await channel.assertQueue(QUEUES.ORDERS_PAYMENT_PROCESSED, { durable: true });
@@ -164,6 +165,40 @@ export class RabbitBroker {
       EXCHANGES.EVENTS,
       ROUTING_KEYS.PAYMENT_ALL
     );
+    await this.assertRetryQueue(
+      channel,
+      QUEUES.ORDERS_PAYMENT_PROCESSED_RETRY,
+      QUEUES.ORDERS_PAYMENT_PROCESSED
+    );
+
+    await channel.assertQueue(QUEUES.LOGISTICS_ORDER_CONFIRMED, { durable: true });
+    await channel.bindQueue(
+      QUEUES.LOGISTICS_ORDER_CONFIRMED,
+      EXCHANGES.EVENTS,
+      ROUTING_KEYS.ORDER_CONFIRMED
+    );
+    await this.assertRetryQueue(
+      channel,
+      QUEUES.LOGISTICS_ORDER_CONFIRMED_RETRY,
+      QUEUES.LOGISTICS_ORDER_CONFIRMED
+    );
+  }
+
+  // Fila de espera que, no fim do TTL, devolve a mensagem direto para a fila
+  // de origem pelo exchange default (""), sem passar de novo pelo topic e
+  // sem duplicar para outros consumidores da mesma routing key.
+  private async assertRetryQueue(
+    channel: ConfirmChannel,
+    retryQueue: string,
+    targetQueue: string
+  ): Promise<void> {
+    await channel.assertQueue(retryQueue, {
+      durable: true,
+      messageTtl: this.options.retryDelayMs,
+      deadLetterExchange: '',
+      deadLetterRoutingKey: targetQueue,
+    });
+    await channel.bindQueue(retryQueue, EXCHANGES.RETRY, targetQueue);
   }
 
   // Publica e so resolve quando o broker confirma que aceitou
@@ -212,7 +247,10 @@ export class RabbitBroker {
       async (message) => {
         if (!message) return;
 
-        const routingKey = message.fields.routingKey;
+        // Voltando do retry, a routing key real vem no header
+        const routingKey =
+          (message.properties.headers?.[ORIGINAL_ROUTING_KEY_HEADER] as string | undefined) ??
+          message.fields.routingKey;
 
         // A fila pode estar ligada a mais chaves do que este handler trata,
         // como o payment.* que cobre approved e rejected
@@ -246,7 +284,7 @@ export class RabbitBroker {
               `Falha ao processar ${routingKey} (tentativa ${attempt}/${this.options.maxRetries}): ${reason}. ` +
                 `Reagendando em ${this.options.retryDelayMs}ms.`
             );
-            await this.sendToRetry(message, routingKey, attempt);
+            await this.sendToRetry(message, sub.queue, routingKey, attempt);
           } else {
             this.warn(
               `Falha definitiva em ${routingKey} após ${this.options.maxRetries} retentativas: ${reason}. ` +
@@ -271,8 +309,11 @@ export class RabbitBroker {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
   }
 
+  // Publica no exchange de retry com a fila de origem como routing key, entao
+  // cada fila consumidora tem a sua propria fila de espera.
   private async sendToRetry(
     message: amqp.ConsumeMessage,
+    sourceQueue: string,
     routingKey: string,
     attempt: number
   ): Promise<void> {
@@ -281,13 +322,17 @@ export class RabbitBroker {
     await new Promise<void>((resolve, reject) => {
       channel.publish(
         EXCHANGES.RETRY,
-        routingKey,
+        sourceQueue,
         message.content,
         {
           persistent: true,
           contentType: message.properties.contentType ?? 'application/json',
           messageId: message.properties.messageId,
-          headers: { ...message.properties.headers, [RETRY_COUNT_HEADER]: attempt },
+          headers: {
+            ...message.properties.headers,
+            [RETRY_COUNT_HEADER]: attempt,
+            [ORIGINAL_ROUTING_KEY_HEADER]: routingKey,
+          },
         },
         (err) => (err ? reject(err) : resolve())
       );

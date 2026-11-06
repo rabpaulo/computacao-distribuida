@@ -9,6 +9,10 @@ export class PaymentPublisher {
   // Diferente do order.created, o erro aqui sobe: sem esse evento o pedido
   // trava em PENDING, entao e melhor o broker reentregar e tentar de novo.
   async publishResult(payment: Payment): Promise<void> {
+    if (payment.status === 'PENDING_APPROVAL') {
+      throw new Error(`Pagamento ${payment.id} ainda aguarda o comprador, nada a publicar`);
+    }
+
     const routingKey =
       payment.status === 'APPROVED'
         ? ROUTING_KEYS.PAYMENT_APPROVED

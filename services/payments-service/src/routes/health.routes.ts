@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { checkDatabaseHealth } from '../config/database';
 import { broker } from '../messaging';
+import { listCircuitBreakers } from '../resilience/circuit-breaker';
 
 const router = Router();
 
@@ -10,6 +11,15 @@ router.get('/health', (_req: Request, res: Response) => {
     service: 'payments-service',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    circuitBreakers: listCircuitBreakers(),
+  });
+});
+
+// Estado detalhado dos circuit breakers deste processo
+router.get('/circuit-breakers', (_req: Request, res: Response) => {
+  res.status(200).json({
+    service: 'payments-service',
+    circuitBreakers: listCircuitBreakers(),
   });
 });
 
@@ -34,6 +44,7 @@ router.get('/ready', async (_req: Request, res: Response) => {
     service: 'payments-service',
     database: 'CONNECTED',
     messaging: 'CONNECTED',
+    circuitBreakers: listCircuitBreakers(),
     timestamp: new Date().toISOString(),
   });
 });

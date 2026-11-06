@@ -1,0 +1,99 @@
+# ==============================================================================
+# Eclipse Mosquitto - Broker MQTT da frota de entregas (IoT)
+#
+# Porta 1883 -> MQTT (caminhoes e logistics-service)
+# Persistencia ligada: sessoes persistentes (clean=false) e mensagens
+# retained (status dos caminhoes) sobrevivem a restart do pod.
+# ==============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mosquitto-config
+  namespace: districommerce
+data:
+  mosquitto.conf: |
+    listener 1883
+    protocol mqtt
+    allow_anonymous true
+    persistence true
+    persistence_location /mosquitto/data/
+    log_dest stdout
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mosquitto-pvc
+  namespace: districommerce
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mosquitto
+  namespace: districommerce
+  labels:
+    app: mosquitto
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mosquitto
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mosquitto
+    spec:
+      containers:
+        - name: mosquitto
+          image: eclipse-mosquitto:2.0
+          ports:
+            - containerPort: 1883
+              name: mqtt
+          volumeMounts:
+            - name: config
+              mountPath: /mosquitto/config/mosquitto.conf
+              subPath: mosquitto.conf
+            - name: data
+              mountPath: /mosquitto/data
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            tcpSocket:
+              port: 1883
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: mosquitto-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: mosquitto-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosquitto
+  namespace: districommerce
+  labels:
+    app: mosquitto
+spec:
+  type: ClusterIP
+  ports:
+    - port: 1883
+      targetPort: 1883
+      name: mqtt
+  selector:
+    app: mosquitto

@@ -23,8 +23,7 @@ async function bootstrap() {
     const server = app.listen(env.PORT, () => {
       console.log(`[payments-service] Servidor rodando na porta ${env.PORT}`);
       console.log(
-        `[payments-service] Simulação do gateway: latência ${env.PAYMENT_LATENCY_MS}ms, ` +
-          `taxa de falha transitória ${(env.PAYMENT_FAILURE_RATE * 100).toFixed(0)}%, ` +
+        `[payments-service] Gateway PayPal (simulado) em ${env.PAYPAL_BASE_URL}, ` +
           `limite R$ ${env.PAYMENT_MAX_AMOUNT.toFixed(2)}`
       );
     });

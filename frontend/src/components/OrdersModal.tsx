@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
-import { Order } from '../types';
-import { X, Package, Calendar, Loader2, CheckCircle2, Clock, XCircle } from 'lucide-react';
+import { Order, Payment, Shipment } from '../types';
+import { X, Package, Calendar, Loader2, CheckCircle2, Clock, XCircle, Wallet } from 'lucide-react';
+import { PayPalCheckoutModal } from './PayPalCheckoutModal';
+import { ShipmentTracker } from './ShipmentTracker';
 
 interface OrdersModalProps {
   isOpen: boolean;
@@ -17,7 +19,15 @@ const STATUS_LABEL: Record<Order['status'], string> = {
   CANCELLED: 'Pagamento recusado',
 };
 
-const StatusBadge: React.FC<{ status: Order['status'] }> = ({ status }) => {
+const StatusBadge: React.FC<{ status: Order['status']; awaitingPayer?: boolean }> = ({ status, awaitingPayer }) => {
+  if (awaitingPayer) {
+    return (
+      <span className="status-badge status-pending">
+        <Wallet size={12} /> Aguardando pagamento
+      </span>
+    );
+  }
+
   const icon =
     status === 'CONFIRMED' ? (
       <CheckCircle2 size={12} />
@@ -36,7 +46,11 @@ const StatusBadge: React.FC<{ status: Order['status'] }> = ({ status }) => {
 
 export const OrdersModal: React.FC<OrdersModalProps> = ({ isOpen, onClose }) => {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [payments, setPayments] = useState<Record<string, Payment>>({});
+  const [shipments, setShipments] = useState<Record<string, Shipment>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -44,19 +58,33 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({ isOpen, onClose }) => 
 
     let cancelled = false;
 
-    // Enquanto sobrar pedido em PENDING, reconsulta. O status so muda
-    // quando o payments-service responder pela fila, bem depois do checkout.
+    // Reconsulta enquanto houver algo andando: pedido PENDING (pagamento
+    // pela fila) ou entrega ainda nao concluida (telemetria MQTT).
     const load = async (showSpinner: boolean) => {
       if (showSpinner) setIsLoading(true);
 
       try {
-        const data = await api.getMyOrders();
+        // Pagamentos e entregas sao best-effort: se o servico estiver fora,
+        // o historico de pedidos continua aparecendo.
+        const [data, paymentList, shipmentList] = await Promise.all([
+          api.getMyOrders(),
+          api.getMyPayments().catch(() => [] as Payment[]),
+          api.getMyShipments().catch(() => [] as Shipment[]),
+        ]);
         if (cancelled) return;
 
         const list = data || [];
         setOrders(list);
+        setPayments(Object.fromEntries(paymentList.map((p) => [p.order_id, p])));
+        const shipmentMap = Object.fromEntries(shipmentList.map((s) => [s.order_id, s]));
+        setShipments(shipmentMap);
 
-        if (list.some((order) => order.status === 'PENDING')) {
+        const active = list.some(
+          (order) =>
+            order.status === 'PENDING' ||
+            (order.status === 'CONFIRMED' && shipmentMap[order.id]?.status !== 'DELIVERED')
+        );
+        if (active) {
           pollTimer.current = setTimeout(() => load(false), POLL_INTERVAL_MS);
         }
       } catch (err) {
@@ -66,7 +94,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({ isOpen, onClose }) => 
       }
     };
 
-    void load(true);
+    void load(reloadKey === 0);
 
     return () => {
       cancelled = true;
@@ -75,11 +103,13 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({ isOpen, onClose }) => 
         pollTimer.current = null;
       }
     };
-  }, [isOpen]);
+  }, [isOpen, reloadKey]);
 
   if (!isOpen) return null;
 
-  const pendingCount = orders.filter((order) => order.status === 'PENDING').length;
+  const awaitingPayer = (order: Order) =>
+    order.status === 'PENDING' && payments[order.id]?.status === 'PENDING_APPROVAL';
+  const pendingCount = orders.filter((order) => order.status === 'PENDING' && !awaitingPayer(order)).length;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -132,7 +162,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({ isOpen, onClose }) => 
                           </span>
                         </div>
                       </div>
-                      <StatusBadge status={order.status} />
+                      <StatusBadge status={order.status} awaitingPayer={awaitingPayer(order)} />
                     </div>
 
                     <div className="order-items-table">
@@ -152,6 +182,18 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({ isOpen, onClose }) => 
                         R$ {order.total_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </strong>
                     </div>
+
+                    {awaitingPayer(order) && (
+                      <button className="btn-paypal btn-paypal-inline" onClick={() => setCheckoutOrder(order)}>
+                        <Wallet size={15} /> Pagar com PayPal
+                      </button>
+                    )}
+
+                    {order.status === 'CANCELLED' && payments[order.id]?.reason && (
+                      <p className="order-reason">Motivo: {payments[order.id].reason}</p>
+                    )}
+
+                    {order.status === 'CONFIRMED' && <ShipmentTracker shipment={shipments[order.id]} />}
                   </div>
                 ))}
               </div>
@@ -159,6 +201,23 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({ isOpen, onClose }) => 
           )}
         </div>
       </div>
+
+      {checkoutOrder && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <PayPalCheckoutModal
+            orderId={checkoutOrder.id}
+            amount={checkoutOrder.total_amount}
+            paypalOrderId={payments[checkoutOrder.id]?.paypal_order_id ?? null}
+            onClose={() => setCheckoutOrder(null)}
+            onDone={(payment) => {
+              setPayments((prev) => ({ ...prev, [payment.order_id]: payment }));
+              setCheckoutOrder(null);
+              // Reabre o ciclo de polling para ver o pedido mudar de status
+              setReloadKey((k) => k + 1);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 };

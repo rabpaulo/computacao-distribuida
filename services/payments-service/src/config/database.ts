@@ -34,6 +34,12 @@ export async function initDatabase(): Promise<void> {
     -- o broker reentrega a mensagem
     CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_order_id ON payments(order_id);
     CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
+
+    -- Colunas do fluxo PayPal (semanas 5-6). ADD COLUMN IF NOT EXISTS
+    -- deixa o boot funcionar tambem em bancos criados na entrega anterior.
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS method VARCHAR(20) NOT NULL DEFAULT 'PAYPAL';
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS paypal_order_id VARCHAR(40);
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS paypal_capture_id VARCHAR(40);
   `;
 
   await pool.query(query);

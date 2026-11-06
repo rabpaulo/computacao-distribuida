@@ -1,4 +1,4 @@
-import { Order, Product, ServiceHealth, User } from '../types';
+import { Order, Payment, Product, ServiceHealth, Shipment, User } from '../types';
 
 const API_BASE = '/api/v1';
 
@@ -134,6 +134,52 @@ export const api = {
   },
 
   // ==========================================
+  // Pagamentos (PayPal simulado)
+  // ==========================================
+  async getMyPayments(): Promise<Payment[]> {
+    const res = await fetch(`${API_BASE}/payments/my-payments`, {
+      headers: getAuthHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Erro ao carregar pagamentos');
+    return data.data.payments;
+  },
+
+  // Comprador aprovou na tela do PayPal. DECLINE simula o cartão recusado.
+  async approvePayPal(orderId: string, decision: 'APPROVE' | 'DECLINE'): Promise<Payment> {
+    const res = await fetch(`${API_BASE}/payments/order/${orderId}/paypal/approve`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ decision }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Erro ao confirmar pagamento no PayPal');
+    return data.data.payment;
+  },
+
+  async cancelPayPal(orderId: string): Promise<Payment> {
+    const res = await fetch(`${API_BASE}/payments/order/${orderId}/paypal/cancel`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Erro ao cancelar pagamento');
+    return data.data.payment;
+  },
+
+  // ==========================================
+  // Logística / Rastreamento IoT
+  // ==========================================
+  async getMyShipments(): Promise<Shipment[]> {
+    const res = await fetch(`${API_BASE}/shipments/my-shipments`, {
+      headers: getAuthHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Erro ao carregar entregas');
+    return data.data.shipments;
+  },
+
+  // ==========================================
   // Monitoramento do Cluster / API Gateway
   // ==========================================
   async getClusterHealth(): Promise<{ gateway: string; services: ServiceHealth[] }> {
@@ -149,6 +195,7 @@ export const api = {
           { name: 'products-service', url: 'http://localhost:3002', status: 'OFFLINE' },
           { name: 'orders-service', url: 'http://localhost:3003', status: 'OFFLINE' },
           { name: 'payments-service', url: 'http://localhost:3004', status: 'OFFLINE' },
+          { name: 'logistics-service', url: 'http://localhost:3005', status: 'OFFLINE' },
         ],
       };
     }

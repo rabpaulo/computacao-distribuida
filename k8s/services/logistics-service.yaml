@@ -1,0 +1,144 @@
+# ==============================================================================
+# logistics-service - Entregas e rastreamento IoT
+#
+# Consome `order.confirmed` (RabbitMQ), despacha para caminhoes via MQTT e
+# processa telemetria. Com 2 replicas, telemetria e eventos sao divididos
+# por shared subscription ($share/logistics/...), sem processamento duplo.
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logistics-service
+  namespace: districommerce
+  labels:
+    app: logistics-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: logistics-service
+  template:
+    metadata:
+      labels:
+        app: logistics-service
+    spec:
+      containers:
+        - name: logistics-service
+          image: districommerce/logistics-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3005
+              name: http
+          env:
+            - name: PORT
+              value: "3005"
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: NODE_ENV
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_PORT
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_USER
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_NAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: POSTGRES_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: JWT_SECRET
+            - name: RABBITMQ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: RABBITMQ_URL
+            - name: RABBITMQ_PREFETCH
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: RABBITMQ_PREFETCH
+            - name: RABBITMQ_MAX_RETRIES
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: RABBITMQ_MAX_RETRIES
+            - name: RABBITMQ_RETRY_DELAY_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: RABBITMQ_RETRY_DELAY_MS
+            - name: MQTT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: MQTT_URL
+            - name: WAREHOUSE_LAT
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: WAREHOUSE_LAT
+            - name: WAREHOUSE_LNG
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: WAREHOUSE_LNG
+            - name: CARGO_TEMP_ALERT_C
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: CARGO_TEMP_ALERT_C
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3005
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3005
+            initialDelaySeconds: 20
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logistics-service
+  namespace: districommerce
+  labels:
+    app: logistics-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3005
+      targetPort: 3005
+      name: http
+  selector:
+    app: logistics-service

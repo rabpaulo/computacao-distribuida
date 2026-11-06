@@ -9,7 +9,58 @@ export const getPaymentByOrderSchema = z.object({
   }),
 });
 
+export const approvePayPalSchema = z.object({
+  params: z.object({
+    orderId: z.string().uuid('ID de pedido inválido'),
+  }),
+  body: z
+    .object({
+      // DECLINE simula o PayPal recusando o meio de pagamento na captura
+      decision: z.enum(['APPROVE', 'DECLINE']).default('APPROVE'),
+    })
+    .default({}),
+});
+
 export class PaymentController {
+  // Comprador aprovou na tela (simulada) do PayPal: captura o pagamento
+  async approvePayPal(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        throw new AppError(401, 'Usuário não autenticado');
+      }
+
+      const payment = await paymentService.approve(
+        req.params.orderId,
+        req.user.userId,
+        req.user.role,
+        req.body?.decision === 'DECLINE' ? 'DECLINE' : 'APPROVE'
+      );
+
+      res.status(200).json({ status: 'success', data: { payment } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Comprador fechou/cancelou a tela do PayPal
+  async cancelPayPal(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        throw new AppError(401, 'Usuário não autenticado');
+      }
+
+      const payment = await paymentService.cancel(
+        req.params.orderId,
+        req.user.userId,
+        req.user.role
+      );
+
+      res.status(200).json({ status: 'success', data: { payment } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Pagamento de um pedido especifico
   async getByOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {

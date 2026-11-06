@@ -38,7 +38,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOpenAuth, onOrderCompl
       }));
 
       const createdOrder = await api.createOrder(orderPayload);
-      setOrderSuccess(`Pedido #${createdOrder.id.slice(0, 8)} confirmado com sucesso!`);
+      setOrderSuccess(
+        `Pedido #${createdOrder.id.slice(0, 8)} criado! Abra "Meus Pedidos" para pagar com PayPal.`
+      );
       clearCart();
       onOrderCompleted();
     } catch (err: any) {

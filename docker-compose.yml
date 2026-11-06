@@ -146,6 +146,11 @@ services:
       RABBITMQ_PREFETCH: 10
       RABBITMQ_MAX_RETRIES: 3
       RABBITMQ_RETRY_DELAY_MS: 5000
+      # Circuit breaker das chamadas ao products-service
+      CB_FAILURE_RATE_THRESHOLD: 0.5
+      CB_MINIMUM_CALLS: 5
+      CB_RESET_TIMEOUT_MS: 10000
+      CB_CALL_TIMEOUT_MS: 3000
     depends_on:
       postgres:
         condition: service_healthy
@@ -156,7 +161,9 @@ services:
 
   # ============================================================================
   # 7. Microsserviço de Pagamentos (Consumidor Assíncrono via RabbitMQ)
-  #    Não expõe o checkout: reage ao evento order.created publicado na fila.
+  #    Reage ao order.created criando uma ordem no PayPal (simulado) e
+  #    captura quando o comprador aprova. Chamadas ao PayPal passam pelo
+  #    circuit breaker "paypal-gateway".
   # ============================================================================
   payments-service:
     build:
@@ -177,15 +184,130 @@ services:
       JWT_SECRET: districommerce-users-secret-jwt-key-minimum-length
       RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672
       RABBITMQ_PREFETCH: 5
-      RABBITMQ_MAX_RETRIES: 3
+      RABBITMQ_MAX_RETRIES: 5  # janela de ~25s: dá tempo do breaker fechar antes da DLQ
       RABBITMQ_RETRY_DELAY_MS: 5000
-      PAYMENT_LATENCY_MS: 2000
-      PAYMENT_FAILURE_RATE: 0.3
       PAYMENT_MAX_AMOUNT: 50000
+      PAYPAL_BASE_URL: http://paypal-mock:3006
+      PAYPAL_CLIENT_ID: districommerce-sandbox-client
+      PAYPAL_CLIENT_SECRET: districommerce-sandbox-secret
+      PAYPAL_CURRENCY: BRL
+      CB_FAILURE_RATE_THRESHOLD: 0.5
+      CB_MINIMUM_CALLS: 5
+      CB_RESET_TIMEOUT_MS: 10000
+      CB_CALL_TIMEOUT_MS: 3000
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      paypal-mock:
+        condition: service_started
+    networks:
+      - districommerce-network
+
+  # ============================================================================
+  # 7.1 Simulador do PayPal (imita a API REST v2 - NÃO fala com o PayPal real)
+  #     Caos em runtime: curl -XPOST localhost:3006/__admin/chaos \
+  #       -H 'Content-Type: application/json' -d '{"mode":"error"}'
+  # ============================================================================
+  paypal-mock:
+    build:
+      context: ./services/paypal-mock
+      dockerfile: Dockerfile
+    container_name: districommerce-paypal-mock
+    restart: unless-stopped
+    ports:
+      - "3006:3006"
+    environment:
+      PORT: 3006
+      NODE_ENV: production
+      PAYPAL_CLIENT_ID: districommerce-sandbox-client
+      PAYPAL_CLIENT_SECRET: districommerce-sandbox-secret
+      PAYPAL_LATENCY_MS: 800
+      PAYPAL_FAILURE_RATE: 0.1
+      PAYPAL_CHAOS_MODE: normal
+    networks:
+      - districommerce-network
+
+  # ============================================================================
+  # 7.2 Broker MQTT (Eclipse Mosquitto) - IoT dos caminhões de entrega
+  # ============================================================================
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: districommerce-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/broker/uptime' -C 1 -W 3 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - districommerce-network
+
+  # ============================================================================
+  # 7.3 Microsserviço de Logística (RabbitMQ order.confirmed + MQTT da frota)
+  # ============================================================================
+  logistics-service:
+    build:
+      context: ./services/logistics-service
+      dockerfile: Dockerfile
+    container_name: districommerce-logistics-service
+    restart: unless-stopped
+    ports:
+      - "3005:3005"
+    environment:
+      PORT: 3005
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgrespassword
+      DB_NAME: districommerce_users
+      JWT_SECRET: districommerce-users-secret-jwt-key-minimum-length
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672
+      RABBITMQ_PREFETCH: 10
+      RABBITMQ_MAX_RETRIES: 3
+      RABBITMQ_RETRY_DELAY_MS: 5000
+      MQTT_URL: mqtt://mosquitto:1883
+      WAREHOUSE_LAT: -23.5614
+      WAREHOUSE_LNG: -46.6559
+      CARGO_TEMP_ALERT_C: 30
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    networks:
+      - districommerce-network
+
+  # ============================================================================
+  # 7.4 Simulador IoT: caminhões com GPS, sensor de temperatura e combustível
+  # ============================================================================
+  iot-simulator:
+    build:
+      context: ./services/iot-simulator
+      dockerfile: Dockerfile
+    container_name: districommerce-iot-simulator
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      MQTT_URL: mqtt://mosquitto:1883
+      FLEET_SIZE: 3
+      TRIP_DURATION_S: 60
+      PICKUP_DELAY_S: 5
+      TELEMETRY_INTERVAL_MS: 2000
+      TEMP_SPIKE_PROBABILITY: 0.03
+      WAREHOUSE_LAT: -23.5614
+      WAREHOUSE_LNG: -46.6559
+    depends_on:
+      mosquitto:
         condition: service_healthy
     networks:
       - districommerce-network
@@ -208,12 +330,14 @@ services:
       PRODUCTS_SERVICE_URL: http://products-service:3002
       ORDERS_SERVICE_URL: http://orders-service:3003
       PAYMENTS_SERVICE_URL: http://payments-service:3004
+      LOGISTICS_SERVICE_URL: http://logistics-service:3005
       CLIENT_ORIGIN: "*"
     depends_on:
       - users-service
       - products-service
       - orders-service
       - payments-service
+      - logistics-service
     networks:
       - districommerce-network
 
@@ -240,6 +364,8 @@ volumes:
     name: districommerce_mongodb_data
   rabbitmq_data:
     name: districommerce_rabbitmq_data
+  mosquitto_data:
+    name: districommerce_mosquitto_data
 
 networks:
   districommerce-network:

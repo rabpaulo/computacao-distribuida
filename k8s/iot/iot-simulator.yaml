@@ -1,0 +1,56 @@
+# ==============================================================================
+# iot-simulator - Frota simulada de caminhoes (GPS, temperatura, combustivel)
+#
+# Uma replica so: cada caminhao usa clientId fixo no MQTT (sessao
+# persistente). Duas replicas brigariam pelo mesmo clientId.
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iot-simulator
+  namespace: districommerce
+  labels:
+    app: iot-simulator
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: iot-simulator
+  template:
+    metadata:
+      labels:
+        app: iot-simulator
+    spec:
+      containers:
+        - name: iot-simulator
+          image: districommerce/iot-simulator:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MQTT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: MQTT_URL
+            - name: WAREHOUSE_LAT
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: WAREHOUSE_LAT
+            - name: WAREHOUSE_LNG
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: WAREHOUSE_LNG
+            - name: FLEET_SIZE
+              value: "3"
+            - name: TRIP_DURATION_S
+              value: "60"
+          resources:
+            requests:
+              cpu: 20m
+              memory: 48Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

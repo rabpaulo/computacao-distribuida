@@ -149,6 +149,10 @@ Coleção `products`:
 ## 6. Próximas Entregas e Evolução da Plataforma
 
 - **Semanas 3-4:** Implementação do API Gateway centralizado, Mensageria assíncrona (RabbitMQ/Kafka) e Frontend Cliente em React. **[CONCLUÍDO]** Mensageria implementada com RabbitMQ (AMQP 0-9-1): o `orders-service` publica `order.created` e o `payments-service` responde com `payment.approved`/`payment.rejected`, com retentativa atrasada via fila-TTL, Dead Letter Queue e consumo idempotente. Detalhes na seção "Mensageria Assíncrona" do README e no `docs/ROTEIRO-DE-TESTES.md`.
-- **Semanas 5-6:** Resiliência com Circuit Breaker, Pagamento assíncrono e Rastreamento de entregas IoT via MQTT.
+- **Semanas 5-6:** Resiliência com Circuit Breaker, Pagamento assíncrono e Rastreamento de entregas IoT via MQTT. **[CONCLUÍDO]**
+  - **Circuit Breaker** (implementação própria no estilo Resilience4J: janela deslizante, taxa de falha, timeout por chamada, estados CLOSED/OPEN/HALF_OPEN) protegendo `orders-service → products-service` e `payments-service → PayPal`. Estado exposto em `/health` e `/circuit-breakers` e no monitor do cluster no frontend.
+  - **Pagamento PayPal simulado:** novo contêiner `paypal-mock` que imita a API REST v2 (OAuth client credentials, criar ordem, aprovação do comprador, captura, idempotência por `PayPal-Request-Id`, modo caos). O `payments-service` cria a ordem ao consumir `order.created` e captura quando o comprador aprova no frontend.
+  - **Logística IoT:** novo `logistics-service` (consome `order.confirmed` do RabbitMQ, despacha por MQTT) e `iot-simulator` (frota de caminhões com GPS, temperatura do baú e combustível) sobre Eclipse Mosquitto. QoS 0/1 por tipo de mensagem, retained + Last Will para presença, sessão persistente para despachos, shared subscription para escalar réplicas.
+  - Roteiro em `docs/ROTEIRO-DE-TESTES-ENTREGA-3.md`.
 - **Semana 7:** Pipeline de CI/CD (GitHub Actions), Monitoramento Prometheus/Grafana e Testes de Carga.
 - **Semana 8:** Documentação final consolidada e demonstração completa.

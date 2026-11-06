@@ -70,7 +70,23 @@ A plataforma adota uma arquitetura de microsserviços desacoplada, orientada a c
 | Frontend → Gateway → serviços | Síncrona | REST / HTTP | O cliente precisa da resposta imediata (catálogo, login, histórico) |
 | orders-service → payments-service | **Assíncrona** | **RabbitMQ (AMQP 0-9-1)** | O gateway de pagamento é lento e pode falhar: travar o checkout nele seria acoplamento temporal |
 | payments-service → orders-service | **Assíncrona** | **RabbitMQ (AMQP 0-9-1)** | O resultado chega quando estiver pronto; o pedido transiciona de status sozinho |
-| orders-service → products-service | Síncrona | REST / HTTP | A reserva de estoque precisa ser validada antes de aceitar o pedido |
+| orders-service → products-service | Síncrona | REST / HTTP + **Circuit Breaker** | A reserva de estoque precisa ser validada antes de aceitar o pedido |
+| payments-service → PayPal (simulado) | Síncrona | REST / HTTP + **Circuit Breaker** | Dependência externa: lenta e instável, precisa falhar rápido quando cair |
+| orders-service → logistics-service | **Assíncrona** | RabbitMQ (`order.confirmed`) | Pedido pago vira entrega sem acoplar os dois serviços |
+| logistics-service ⇄ caminhões | **Assíncrona** | **MQTT** (Mosquitto) | Dispositivos IoT com rede instável: protocolo leve, QoS, Last Will |
+
+### Semanas 5-6: Resiliência, PayPal e IoT
+
+```
+                     Circuit Breaker                  Circuit Breaker
+orders-service ──────[products-service]──> products   payments-service ──[paypal-gateway]──> paypal-mock :3006
+     │                                                       ^   (OAuth, /v2/checkout/orders, capture)
+     │ order.confirmed (RabbitMQ)                            │ POST /payments/order/:id/paypal/approve
+     v                                                   Frontend ("Pagar com PayPal")
+logistics-service :3005 ──MQTT dispatch (QoS 1)──> Mosquitto :1883 <──telemetria (QoS 0)── iot-simulator
+     ^                                                   │          ──eventos (QoS 1)───── (truck-01..03)
+     └────────── status retained + Last Will ────────────┘
+```
 
 ---
 
@@ -109,6 +125,8 @@ comp-dist/
 │   ├── orders-service/                    # Pedidos e Processamento de Checkout (Porta 3003)
 │   │   ├── Dockerfile
 │   │   ├── src/
+│   │   │   ├── clients/products.client.ts # Chamadas ao products-service via circuit breaker
+│   │   │   ├── resilience/circuit-breaker.ts
 │   │   │   ├── (Orders, Estoque, Postgres)
 │   │   │   └── messaging/                 # Producer order.created + Consumer payment.*
 │   │   │       ├── config.ts              # Exchanges, filas e routing keys
@@ -118,14 +136,26 @@ comp-dist/
 │   │   │       └── payment.consumer.ts    # Consome payment.approved / payment.rejected
 │   │   └── tests/
 │   │
-│   └── payments-service/                  # Pagamento Assíncrono (Porta 3004)
-│       ├── Dockerfile
-│       ├── src/
-│       │   ├── (Simulação de gateway, Postgres)
-│       │   └── messaging/
-│       │       ├── order.consumer.ts      # Consome order.created
-│       │       └── payment.publisher.ts   # Publica payment.approved / payment.rejected
-│       └── tests/
+│   ├── payments-service/                  # Pagamento Assíncrono (Porta 3004)
+│   │   ├── Dockerfile
+│   │   ├── src/
+│   │   │   ├── paypal/paypal.client.ts    # Cliente da API PayPal v2 (simulada) + circuit breaker
+│   │   │   ├── resilience/                # Circuit breaker (mesmo arquivo do orders-service)
+│   │   │   └── messaging/
+│   │   │       ├── order.consumer.ts      # Consome order.created e cria a ordem PayPal
+│   │   │       └── payment.publisher.ts   # Publica payment.approved / payment.rejected
+│   │   └── tests/
+│   │
+│   ├── paypal-mock/                       # Simulador da API REST v2 do PayPal (Porta 3006)
+│   │
+│   ├── logistics-service/                 # Entregas + rastreamento IoT (Porta 3005)
+│   │   └── src/
+│   │       ├── iot/topics.ts              # Contrato de tópicos MQTT (igual no simulador)
+│   │       ├── iot/fleet.gateway.ts       # Cliente MQTT: status, telemetria, eventos, despacho
+│   │       ├── messaging/order.consumer.ts# Consome order.confirmed
+│   │       └── services/shipment.service.ts
+│   │
+│   └── iot-simulator/                     # Frota de caminhões (GPS, temperatura, combustível) via MQTT
 │
 ├── k8s/                                   # Manifestos Kubernetes declarativos (Kustomize)
 │   ├── namespace.yaml
@@ -133,11 +163,13 @@ comp-dist/
 │   ├── secrets/
 │   ├── databases/ (PostgreSQL, MongoDB)
 │   ├── messaging/ (RabbitMQ + painel de administração)
+│   ├── iot/ (Mosquitto, iot-simulator)
 │   ├── services/ (API Gateway, Users, Products, Orders, Payments, Frontend)
 │   ├── ingress.yaml
 │   └── kustomization.yaml
 │
-├── docker-compose.yml                     # Orquestração local completa (9 contêineres)
+├── infra/mosquitto/mosquitto.conf         # Configuração do broker MQTT
+├── docker-compose.yml                     # Orquestração local completa (13 contêineres)
 ├── package.json                           # Configuração do Workspace raiz
 └── README.md
 ```
@@ -155,7 +187,7 @@ comp-dist/
 
 ### Opção 1: Execução Completa com Docker Compose (Recomendado)
 
-Sobe todos os 9 contêineres automaticamente:
+Sobe todos os 13 contêineres automaticamente:
 - PostgreSQL (5432)
 - MongoDB (27017)
 - **RabbitMQ (5672 / painel em 15672)**
@@ -163,6 +195,10 @@ Sobe todos os 9 contêineres automaticamente:
 - Products Service (3002)
 - Orders Service (3003)
 - **Payments Service (3004)**
+- **PayPal Mock (3006)** — simulador, não fala com o PayPal real
+- **Mosquitto MQTT (1883)**
+- **Logistics Service (3005)**
+- **IoT Simulator** (3 caminhões, sem porta)
 - API Gateway (8000)
 - Frontend React (3000)
 
@@ -191,7 +227,7 @@ docker compose logs -f
 
 2. **Inicie os bancos de dados e o broker em segundo plano:**
    ```bash
-   docker compose up -d postgres mongodb rabbitmq
+   docker compose up -d postgres mongodb rabbitmq mosquitto
    ```
 
 3. **Inicie os serviços do backend em terminais separados (ou use os scripts dedicados):**
@@ -208,8 +244,13 @@ docker compose logs -f
    # Terminal 4 - Orders Service (Porta 3003)
    npm run orders:dev
 
-   # Terminal 5 - Payments Service (Porta 3004)
+   # Terminal 5 - Payments Service (Porta 3004) + simulador PayPal (Porta 3006)
    npm run payments:dev
+   npm run paypal-mock:dev
+
+   # Terminal 6 - Logistics Service (Porta 3005) + frota IoT
+   npm run logistics:dev
+   npm run iot:dev
    ```
 
 4. **Inicie o Frontend React (Porta 3000):**
@@ -259,6 +300,9 @@ Declarada de forma idempotente por ambos os serviços no boot
 | `payments.order-created` | fila | Consumida pelo `payments-service` (`order.created`) |
 | `payments.order-created.retry` | fila com TTL | Espera 5s e devolve a mensagem ao exchange principal |
 | `orders.payment-processed` | fila | Consumida pelo `orders-service` (`payment.*`) |
+| `orders.payment-processed.retry` | fila com TTL | Retentativa do consumidor de pagamentos do `orders-service` |
+| `logistics.order-confirmed` | fila | Consumida pelo `logistics-service` (`order.confirmed`) |
+| `logistics.order-confirmed.retry` | fila com TTL | Retentativa do `logistics-service` |
 | `districommerce.dlq` | fila | Falhas terminais, preservadas para inspeção manual |
 
 ### Fluxo completo
@@ -293,15 +337,12 @@ Declarada de forma idempotente por ambos os serviços no boot
   checkout ainda responde `201`. O pedido fica `PENDING` e `/ready` do
   `orders-service` passa a responder `207 DEGRADED`.
 
-### Simulação do gateway de pagamento
+### Gateway de pagamento
 
-Configurável por variável de ambiente no `payments-service`:
-
-| Variável | Padrão | Efeito |
-|---|---|---|
-| `PAYMENT_LATENCY_MS` | `2000` | Latência artificial, para o processamento ficar visível na demo |
-| `PAYMENT_FAILURE_RATE` | `0.3` | Chance de falha **transitória** — aciona a retentativa. Use `0` para demo determinística |
-| `PAYMENT_MAX_AMOUNT` | `50000` | Acima disso o pagamento é **recusado** em definitivo, sem retentativa |
+Desde as semanas 5-6 o pagamento passa pelo **PayPal simulado** (ver seção
+própria abaixo). A falha transitória que aciona a retentativa vem do
+`paypal-mock` (`PAYPAL_FAILURE_RATE`, padrão `0.1`); a recusa por valor
+continua em `PAYMENT_MAX_AMOUNT` (padrão `50000`) no `payments-service`.
 
 ### Como demonstrar
 
@@ -316,11 +357,12 @@ docker compose up --build -d
 docker compose logs -f orders-service payments-service
 
 # 4. No frontend (http://localhost:3000): logar, adicionar ao carrinho,
-#    finalizar o pedido e abrir "Meus Pedidos".
-#    O badge sai de "Processando pagamento" e vira "Confirmado".
+#    finalizar o pedido e abrir "Meus Pedidos". Clicar em "Pagar com PayPal"
+#    e aprovar. O badge vira "Confirmado" e a entrega começa a ser rastreada.
 
-# 5. Demonstrar a retentativa: com PAYMENT_FAILURE_RATE=0.3 os logs do
-#    payments-service mostram "Reagendando em 5000ms" e a fila
+# 5. Demonstrar a retentativa: ligar o modo caos do PayPal simulado
+curl -X POST localhost:3006/__admin/chaos -H 'Content-Type: application/json' -d '{"mode":"error"}'
+#    Os logs do payments-service mostram "Reagendando em 5000ms" e a fila
 #    payments.order-created.retry acumula mensagens no painel.
 
 # 6. Demonstrar recusa definitiva: montar um carrinho acima de R$ 50.000.
@@ -343,9 +385,106 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/payments/ord
 
 ---
 
+## 🛡️ Circuit Breaker
+
+Implementação própria (sem dependência), no modelo do **Resilience4J**, em
+`services/*/src/resilience/circuit-breaker.ts` — o mesmo arquivo no
+`orders-service` e no `payments-service`.
+
+```
+CLOSED ──(taxa de falha ≥ 50% nas últimas 10 chamadas, mín. 5)──> OPEN
+OPEN ──(10 s)──> HALF_OPEN ──(2 chamadas de teste OK)──> CLOSED
+                     └──────(qualquer falha)──────────> OPEN
+```
+
+| Breaker | Onde | Protege | Fallback com o circuito aberto |
+|---|---|---|---|
+| `products-service` | `orders-service` | Reserva/devolução de estoque | Checkout segue sem reserva, na hora, sem esperar timeout |
+| `paypal-gateway` | `payments-service` | OAuth, criar ordem, captura | `order.created` vai para a fila de retry sem chamada HTTP; aprovação responde **503** com o tempo para tentar de novo |
+
+- **Timeout por chamada** (`CB_CALL_TIMEOUT_MS`, 3 s): lentidão conta como falha.
+- **Erro de negócio não abre o circuito:** estoque insuficiente (409) e recusa
+  do PayPal (4xx, ex. `INSTRUMENT_DECLINED`) significam que o serviço
+  respondeu. Só rede, timeout e 5xx contam.
+- **Observável:** `GET /circuit-breakers` e `/health` de cada serviço; o
+  monitor do cluster no frontend mostra o estado ao vivo.
+- **Combina com o retry do RabbitMQ:** o broker reentrega a mensagem e o
+  breaker impede que cada reentrega martele o gateway caído.
+
+Parâmetros: `CB_SLIDING_WINDOW_SIZE`, `CB_MINIMUM_CALLS`,
+`CB_FAILURE_RATE_THRESHOLD`, `CB_RESET_TIMEOUT_MS`, `CB_HALF_OPEN_MAX_CALLS`,
+`CB_CALL_TIMEOUT_MS`.
+
+---
+
+## 💳 Pagamento PayPal (simulado)
+
+> **Não é uma integração real.** O contêiner `paypal-mock` imita o formato da
+> API REST v2 do PayPal para o `payments-service` ter uma dependência externa
+> de verdade (que cai, demora e falha). Nada sai para o PayPal, nenhum valor é
+> cobrado e nenhum dado do comprador é coletado.
+
+```text
+1. order.created          -> payments-service: OAuth2 client credentials (POST /v1/oauth2/token)
+2.                        -> POST /v2/checkout/orders  (PayPal-Request-Id: create-<pedido>)
+3.                        -> pagamento PENDING_APPROVAL, pedido segue PENDING
+4. Frontend               -> "Pagar com PayPal" abre a tela de checkout simulada
+5a. Aprovar               -> simulate-approval + POST /v2/checkout/orders/:id/capture -> APPROVED -> payment.approved
+5b. Simular recusa        -> capture responde 422 INSTRUMENT_DECLINED            -> REJECTED -> payment.rejected
+5c. Cancelar              ->                                                       REJECTED -> payment.rejected
+```
+
+| Endpoint (via gateway) | Descrição |
+|---|---|
+| `POST /api/v1/payments/order/:orderId/paypal/approve` | Corpo `{"decision": "APPROVE" \| "DECLINE"}` |
+| `POST /api/v1/payments/order/:orderId/paypal/cancel` | Comprador desistiu |
+| `GET /api/v1/payments/my-payments` | Inclui `paypal_order_id` e `paypal_capture_id` |
+
+- **Idempotência ponta a ponta:** `PayPal-Request-Id` derivado do pedido faz a
+  reentrega do RabbitMQ devolver a mesma ordem; o `UPDATE ... WHERE status =
+  'PENDING_APPROVAL'` impede captura dupla com dois cliques.
+- **Modo caos do mock:** `POST localhost:3006/__admin/chaos` com
+  `{"mode": "normal" | "error" | "slow", "failureRate": 0.3, "latencyMs": 500}`.
+
+---
+
+## 🚚 Logística com IoT (MQTT)
+
+Pedido confirmado vira entrega: o `orders-service` publica `order.confirmed`,
+o `logistics-service` abre a entrega, escolhe o caminhão online menos ocupado e
+despacha por MQTT. Os caminhões (`iot-simulator`) publicam GPS, velocidade,
+temperatura do baú e combustível a cada 2 s.
+
+| Tópico | Direção | QoS | Observação |
+|---|---|---|---|
+| `districommerce/fleet/{id}/status` | caminhão → nuvem | 1 | **Retained** + **Last Will** (`online: false` quando cai sem aviso) |
+| `districommerce/fleet/{id}/telemetry` | caminhão → nuvem | 0 | Alta frequência; perder uma leitura não importa |
+| `districommerce/fleet/{id}/events` | caminhão → nuvem | 1 | `PICKED_UP`, `DELIVERED` |
+| `districommerce/fleet/{id}/dispatch` | nuvem → caminhão | 1 | **Sessão persistente**: chega mesmo se o caminhão estava offline |
+
+- **Escala horizontal:** telemetria e eventos usam *shared subscription*
+  (`$share/logistics/...`), então duas réplicas dividem as mensagens sem
+  processar em dobro.
+- **Auto-recuperação:** caminhão que volta online recebe as entregas que
+  estavam esperando (`AWAITING_TRUCK`) e as que ele perdeu ao reiniciar.
+- **Alerta de sensor:** baú acima de `CARGO_TEMP_ALERT_C` (30 °C) gera evento
+  `TEMPERATURE_ALERT` na linha do tempo da entrega.
+- **Frontend:** "Meus Pedidos" mostra etapas, barra de progresso, mini-mapa da
+  rota e leituras dos sensores, atualizando a cada 3 s.
+
+| Endpoint (via gateway) | Descrição |
+|---|---|
+| `GET /api/v1/shipments/my-shipments` | Entregas do usuário |
+| `GET /api/v1/shipments/order/:orderId` | Entrega + linha do tempo de eventos |
+| `GET /api/v1/shipments/fleet` | Estado da frota em tempo real |
+
+Roteiro passo a passo: **[docs/ROTEIRO-DE-TESTES-ENTREGA-3.md](docs/ROTEIRO-DE-TESTES-ENTREGA-3.md)**.
+
+---
+
 ## 🧪 Execução de Testes Automatizados
 
-A suíte de testes automatizados com Vitest e Supertest cobre validações, regras de autenticação JWT, cálculo e reserva atômica de estoque e o fluxo de pagamento assíncrono (publicação do evento, idempotência em reentrega, recusa por regra de negócio, falha transitória e checkout com o broker indisponível):
+A suíte de testes automatizados com Vitest e Supertest cobre validações, regras de autenticação JWT, cálculo e reserva atômica de estoque, o fluxo de pagamento assíncrono (publicação do evento, idempotência em reentrega, recusa por regra de negócio, falha transitória e checkout com o broker indisponível) e, desde as semanas 5-6, a máquina de estados do circuit breaker, o fluxo PayPal simulado e a logística IoT:
 
 ```bash
 # Executar todos os testes de todos os serviços:

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  approvePayPalSchema,
   getPaymentByOrderSchema,
   paymentController,
 } from '../controllers/payment.controller';
@@ -17,6 +18,15 @@ router.get('/my-payments', (req, res, next) => {
 
 router.get('/order/:orderId', validateRequest(getPaymentByOrderSchema), (req, res, next) => {
   paymentController.getByOrder(req, res, next);
+});
+
+// Fluxo PayPal simulado
+router.post('/order/:orderId/paypal/approve', validateRequest(approvePayPalSchema), (req, res, next) => {
+  paymentController.approvePayPal(req, res, next);
+});
+
+router.post('/order/:orderId/paypal/cancel', validateRequest(getPaymentByOrderSchema), (req, res, next) => {
+  paymentController.cancelPayPal(req, res, next);
 });
 
 export default router;

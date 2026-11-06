@@ -10,21 +10,33 @@ const envelopeSchema = z.object({
   occurredAt: z.string().datetime(),
 });
 
+const orderItemsSchema = z
+  .array(
+    z.object({
+      productId: z.string().min(1),
+      productName: z.string().min(1),
+      price: z.number().nonnegative(),
+      quantity: z.number().int().positive(),
+    })
+  )
+  .min(1);
+
 export const orderCreatedSchema = envelopeSchema.extend({
   eventType: z.literal('order.created'),
   orderId: z.string().uuid(),
   userId: z.string().min(1),
   totalAmount: z.number().nonnegative(),
-  items: z
-    .array(
-      z.object({
-        productId: z.string().min(1),
-        productName: z.string().min(1),
-        price: z.number().nonnegative(),
-        quantity: z.number().int().positive(),
-      })
-    )
-    .min(1),
+  items: orderItemsSchema,
+});
+
+// Publicado pelo orders-service quando o pagamento e aprovado.
+// O logistics-service consome para abrir a entrega.
+export const orderConfirmedSchema = envelopeSchema.extend({
+  eventType: z.literal('order.confirmed'),
+  orderId: z.string().uuid(),
+  userId: z.string().min(1),
+  totalAmount: z.number().nonnegative(),
+  items: orderItemsSchema,
 });
 
 export const paymentProcessedSchema = envelopeSchema.extend({
@@ -37,4 +49,5 @@ export const paymentProcessedSchema = envelopeSchema.extend({
 });
 
 export type OrderCreatedEvent = z.infer<typeof orderCreatedSchema>;
+export type OrderConfirmedEvent = z.infer<typeof orderConfirmedSchema>;
 export type PaymentProcessedEvent = z.infer<typeof paymentProcessedSchema>;

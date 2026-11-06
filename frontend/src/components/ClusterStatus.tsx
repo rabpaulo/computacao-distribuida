@@ -34,6 +34,12 @@ export const ClusterStatus: React.FC = () => {
     if (name.includes('orders')) {
       return { db: 'PostgreSQL', purpose: 'Transações ACID', icon: <Database size={12} /> };
     }
+    if (name.includes('payments')) {
+      return { db: 'PostgreSQL', purpose: 'PayPal (simulado) + RabbitMQ', icon: <Database size={12} /> };
+    }
+    if (name.includes('logistics')) {
+      return { db: 'PostgreSQL', purpose: 'Frota IoT via MQTT', icon: <Database size={12} /> };
+    }
     return { db: 'Memória/Cache', purpose: 'Microsserviço', icon: <Server size={12} /> };
   };
 
@@ -100,6 +106,21 @@ export const ClusterStatus: React.FC = () => {
                   <span className="service-tag">{info.db}</span>
                   <span>{info.purpose}</span>
                 </div>
+                {s.data?.circuitBreakers?.map((cb) => (
+                  <div key={cb.name} className="service-meta-line">
+                    <span>⚡ circuit breaker → {cb.name}</span>
+                    <span className={`cb-state cb-${cb.state.toLowerCase()}`}>
+                      {cb.state}
+                      {cb.bufferedCalls > 0 ? ` · ${Math.round(cb.failureRate * 100)}% falhas` : ''}
+                    </span>
+                  </div>
+                ))}
+                {typeof s.data?.trucksOnline === 'number' && (
+                  <div className="service-meta-line">
+                    <span>🚚 caminhões online (MQTT)</span>
+                    <span>{s.data.trucksOnline}</span>
+                  </div>
+                )}
               </div>
             );
           })}

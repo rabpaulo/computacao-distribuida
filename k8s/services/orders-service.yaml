@@ -82,6 +82,26 @@ spec:
                 configMapKeyRef:
                   name: districommerce-config
                   key: RABBITMQ_RETRY_DELAY_MS
+            - name: CB_FAILURE_RATE_THRESHOLD
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: CB_FAILURE_RATE_THRESHOLD
+            - name: CB_MINIMUM_CALLS
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: CB_MINIMUM_CALLS
+            - name: CB_RESET_TIMEOUT_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: CB_RESET_TIMEOUT_MS
+            - name: CB_CALL_TIMEOUT_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: CB_CALL_TIMEOUT_MS
           resources:
             requests:
               cpu: 50m

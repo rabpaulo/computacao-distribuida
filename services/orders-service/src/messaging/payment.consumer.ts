@@ -2,6 +2,7 @@ import { broker } from './index';
 import { QUEUES, ROUTING_KEYS } from './config';
 import { paymentProcessedSchema } from './events';
 import { orderService } from '../services/order.service';
+import { orderPublisher } from './order.publisher';
 
 // Escuta a resposta do payments-service e fecha o ciclo: o pedido sai de
 // PENDING e vira CONFIRMED ou CANCELLED.
@@ -40,6 +41,16 @@ export async function registerPaymentConsumer(): Promise<void> {
         console.log(
           `[orders-service] Pedido ${event.orderId} já estava finalizado. Evento ignorado.`
         );
+      }
+
+      // Pedido confirmado vai pra logistica. Roda tambem na reentrega
+      // (updated = false): se o publish anterior falhou, e aqui que ele sai.
+      // O logistics-service ignora duplicata pelo order_id.
+      if (newStatus === 'CONFIRMED') {
+        const order = await orderService.findWithItems(event.orderId);
+        if (order?.status === 'CONFIRMED') {
+          await orderPublisher.publishOrderConfirmed(order);
+        }
       }
     }
   );

@@ -19,6 +19,14 @@ const envSchema = z.object({
   RABBITMQ_PREFETCH: z.coerce.number().int().positive().default(10),
   RABBITMQ_MAX_RETRIES: z.coerce.number().int().nonnegative().default(3),
   RABBITMQ_RETRY_DELAY_MS: z.coerce.number().int().positive().default(5000),
+
+  // Circuit Breaker (vale para todas as dependencias HTTP do servico)
+  CB_SLIDING_WINDOW_SIZE: z.coerce.number().int().positive().default(10),
+  CB_MINIMUM_CALLS: z.coerce.number().int().positive().default(5),
+  CB_FAILURE_RATE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.5),
+  CB_RESET_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
+  CB_HALF_OPEN_MAX_CALLS: z.coerce.number().int().positive().default(2),
+  CB_CALL_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
 });
 
 export const env = envSchema.parse(process.env);

@@ -1,0 +1,82 @@
+# ==============================================================================
+# paypal-mock - Simulador da API REST v2 do PayPal (NAO e o PayPal real)
+#
+# Dependencia externa "de mentira" do payments-service, usada para
+# demonstrar o circuit breaker. Estado em memoria: uma replica so.
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paypal-mock
+  namespace: districommerce
+  labels:
+    app: paypal-mock
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: paypal-mock
+  template:
+    metadata:
+      labels:
+        app: paypal-mock
+    spec:
+      containers:
+        - name: paypal-mock
+          image: districommerce/paypal-mock:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3006
+              name: http
+          env:
+            - name: PORT
+              value: "3006"
+            - name: PAYPAL_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: PAYPAL_CLIENT_ID
+            - name: PAYPAL_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: PAYPAL_CLIENT_SECRET
+            - name: PAYPAL_LATENCY_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: PAYPAL_LATENCY_MS
+            - name: PAYPAL_FAILURE_RATE
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: PAYPAL_FAILURE_RATE
+          resources:
+            requests:
+              cpu: 20m
+              memory: 48Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3006
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paypal-mock
+  namespace: districommerce
+  labels:
+    app: paypal-mock
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3006
+      targetPort: 3006
+      name: http
+  selector:
+    app: paypal-mock

@@ -38,6 +38,8 @@ spec:
               value: "http://orders-service:3003"
             - name: PAYMENTS_SERVICE_URL
               value: "http://payments-service:3004"
+            - name: LOGISTICS_SERVICE_URL
+              value: "http://logistics-service:3005"
             - name: CLIENT_ORIGIN
               value: "*"
           resources:

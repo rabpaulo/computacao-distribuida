@@ -7,6 +7,8 @@ import { broker } from '../src/messaging';
 import { pool } from '../src/config/database';
 import { orderService } from '../src/services/order.service';
 import { ROUTING_KEYS } from '../src/messaging/config';
+import { productsBreaker } from '../src/clients/products.client';
+import { registerPaymentConsumer } from '../src/messaging/payment.consumer';
 
 vi.mock('../src/config/database', () => ({
   pool: {
@@ -56,6 +58,8 @@ describe('Orders Service - Testes Unitários e de Integração', () => {
     vi.clearAllMocks();
     vi.mocked(broker.isHealthy).mockReturnValue(true);
     vi.mocked(broker.publish).mockResolvedValue(undefined);
+    productsBreaker.reset();
+    vi.unstubAllGlobals();
   });
 
   describe('Health Probes (/health e /ready)', () => {
@@ -221,6 +225,100 @@ describe('Orders Service - Testes Unitários e de Integração', () => {
       expect(mudou).toBe(false);
       expect(fetchMock).not.toHaveBeenCalled();
       vi.unstubAllGlobals();
+    });
+  });
+
+  describe('Circuit Breaker do products-service', () => {
+    const checkout = () =>
+      request(app)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({
+          items: [
+            { productId: 'prod-1', productName: 'Mouse', price: 100, quantity: 1 },
+            { productId: 'prod-2', productName: 'Teclado', price: 200, quantity: 2 },
+          ],
+        });
+
+    it('deve recusar com 409 e desfazer a reserva já feita quando falta estoque', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, status: 200 }) // reserva prod-1
+        .mockResolvedValueOnce({ ok: false, status: 409 }) // prod-2 sem estoque
+        .mockResolvedValueOnce({ ok: true, status: 200 }); // devolve prod-1
+      vi.stubGlobal('fetch', fetchMock);
+
+      const res = await checkout();
+
+      expect(res.status).toBe(409);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({ delta: 1 });
+      // 409 é regra de negócio, não falha do serviço
+      expect(productsBreaker.getState()).toBe('CLOSED');
+      expect(broker.publish).not.toHaveBeenCalled();
+    });
+
+    it('deve abrir o circuito com o products-service fora e parar de chamá-lo', async () => {
+      const fetchMock = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
+      vi.stubGlobal('fetch', fetchMock);
+
+      // 3 checkouts x 2 itens = 6 falhas, acima do mínimo de 5 chamadas
+      for (let i = 0; i < 3; i++) {
+        const res = await checkout();
+        expect(res.status).toBe(201); // fallback: checkout segue
+      }
+      expect(productsBreaker.getState()).toBe('OPEN');
+
+      fetchMock.mockClear();
+      const res = await checkout();
+      expect(res.status).toBe(201);
+      // Circuito aberto: nenhuma chamada HTTP saiu
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('deve expor o estado do breaker em /circuit-breakers', async () => {
+      const res = await request(app).get('/circuit-breakers');
+      expect(res.status).toBe(200);
+      expect(res.body.circuitBreakers[0]).toMatchObject({ name: 'products-service', state: 'CLOSED' });
+    });
+  });
+
+  describe('Integração com a logística (order.confirmed)', () => {
+    it('deve publicar order.confirmed quando o pagamento é aprovado', async () => {
+      await registerPaymentConsumer();
+      const handler = vi.mocked(broker.subscribe).mock.calls[0][2];
+
+      vi.mocked(pool.query)
+        // UPDATE orders -> CONFIRMED
+        .mockResolvedValueOnce({ rows: [{ id: ORDER_ID }], rowCount: 1 } as never)
+        // findWithItems: pedido
+        .mockResolvedValueOnce({
+          rows: [{ id: ORDER_ID, user_id: 'user-123', total_amount: '100.00', status: 'CONFIRMED' }],
+          rowCount: 1,
+        } as never)
+        // findWithItems: itens
+        .mockResolvedValueOnce({
+          rows: [{ id: 'i1', order_id: ORDER_ID, product_id: 'prod-1', product_name: 'Mouse', price: '100.00', quantity: 1 }],
+          rowCount: 1,
+        } as never);
+
+      await handler(
+        {
+          eventId: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+          eventType: 'payment.approved',
+          occurredAt: new Date().toISOString(),
+          orderId: ORDER_ID,
+          paymentId: 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e',
+          amount: 100,
+        },
+        'payment.approved',
+        { retryCount: 0 }
+      );
+
+      expect(broker.publish).toHaveBeenCalledWith(
+        ROUTING_KEYS.ORDER_CONFIRMED,
+        expect.objectContaining({ eventType: 'order.confirmed', orderId: ORDER_ID, userId: 'user-123' })
+      );
     });
   });
 });

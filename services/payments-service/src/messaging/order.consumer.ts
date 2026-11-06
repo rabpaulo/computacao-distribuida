@@ -32,6 +32,16 @@ export async function registerOrderConsumer(): Promise<void> {
       // Erro daqui pra baixo sobe pro broker, que reagenda ou manda pra DLQ
       const { payment, created } = await paymentService.process(event, attempt);
 
+      if (payment.status === 'PENDING_APPROVAL') {
+        // Ordem criada no PayPal. Agora quem decide e o comprador, pelo
+        // frontend; o resultado sai pelo endpoint de aprovacao.
+        console.log(
+          `[payments-service] Pedido ${event.orderId}: ordem PayPal ${payment.paypal_order_id} ` +
+            `${created ? 'criada' : 'já existia'}, aguardando aprovação do comprador.`
+        );
+        return;
+      }
+
       if (!created) {
         console.log(
           `[payments-service] Pedido ${event.orderId} já possui pagamento ` +

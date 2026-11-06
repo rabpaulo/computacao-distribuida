@@ -10,10 +10,14 @@ resources:
   - databases/postgres.yaml
   - databases/mongodb.yaml
   - messaging/rabbitmq.yaml
+  - iot/mosquitto.yaml
+  - iot/iot-simulator.yaml
   - services/users-service.yaml
   - services/products-service.yaml
   - services/orders-service.yaml
   - services/payments-service.yaml
+  - services/paypal-mock.yaml
+  - services/logistics-service.yaml
   - services/api-gateway.yaml
   - services/frontend.yaml
   - ingress.yaml

@@ -19,9 +19,22 @@ data:
   ORDERS_SERVICE_PORT: "3003"
   # Payments Service (consumidor assincrono)
   PAYMENTS_SERVICE_PORT: "3004"
-  PAYMENT_LATENCY_MS: "2000"
-  PAYMENT_FAILURE_RATE: "0.3"
   PAYMENT_MAX_AMOUNT: "50000"
+  # Gateway PayPal simulado (services/paypal-mock)
+  PAYPAL_BASE_URL: "http://paypal-mock:3006"
+  PAYPAL_CURRENCY: "BRL"
+  PAYPAL_LATENCY_MS: "800"
+  PAYPAL_FAILURE_RATE: "0.1"
+  # Circuit Breaker (orders -> products, payments -> PayPal)
+  CB_FAILURE_RATE_THRESHOLD: "0.5"
+  CB_MINIMUM_CALLS: "5"
+  CB_RESET_TIMEOUT_MS: "10000"
+  CB_CALL_TIMEOUT_MS: "3000"
+  # Logistica / IoT (MQTT)
+  MQTT_URL: "mqtt://mosquitto:1883"
+  WAREHOUSE_LAT: "-23.5614"
+  WAREHOUSE_LNG: "-46.6559"
+  CARGO_TEMP_ALERT_C: "30"
   # Mensageria (RabbitMQ / AMQP 0-9-1)
   RABBITMQ_PREFETCH: "10"
   RABBITMQ_MAX_RETRIES: "3"

@@ -4,6 +4,9 @@ import { env } from '../config/env';
 import { Payment, PaymentStatus } from '../models/payment.model';
 import { AppError } from '../middlewares/error.middleware';
 import { OrderCreatedEvent } from '../messaging/events';
+import { paymentPublisher } from '../messaging/payment.publisher';
+import { PayPalApiError, paypalClient } from '../paypal/paypal.client';
+import { CircuitOpenError } from '../resilience/circuit-breaker';
 
 // Falha temporaria do gateway, do tipo que resolve sozinha tentando de novo.
 // Lancar isso no consumer faz o broker reagendar a mensagem. Diferente de
@@ -16,6 +19,21 @@ export interface ProcessResult {
   created: boolean;
 }
 
+export type PayerDecision = 'APPROVE' | 'DECLINE';
+
+const COLUMNS = `id, order_id, user_id, amount, status, method, reason, attempts,
+  paypal_order_id, paypal_capture_id, created_at, updated_at`;
+
+// Fluxo PayPal (simulado):
+//
+//   order.created ──> process(): cria a ordem no PayPal ──> PENDING_APPROVAL
+//                                                              │
+//   comprador clica "Pagar com PayPal" no frontend             │
+//   POST /payments/order/:id/paypal/approve ──> captura ──> APPROVED ──> payment.approved
+//                                          └──> recusa  ──> REJECTED ──> payment.rejected
+//   POST /payments/order/:id/paypal/cancel  ─────────────> REJECTED ──> payment.rejected
+//
+// Todas as chamadas ao PayPal passam pelo circuit breaker "paypal-gateway".
 export class PaymentService {
   async process(event: OrderCreatedEvent, attempt: number): Promise<ProcessResult> {
     const existing = await this.findByOrderId(event.orderId);
@@ -23,20 +41,7 @@ export class PaymentService {
       return { payment: existing, created: false };
     }
 
-    // Gateway de verdade demora. E justamente por isso que o pagamento
-    // nao pode travar o checkout.
-    if (env.PAYMENT_LATENCY_MS > 0) {
-      await new Promise((resolve) => setTimeout(resolve, env.PAYMENT_LATENCY_MS));
-    }
-
-    // Caso 1: o gateway caiu. Nada e gravado, o broker reentrega depois.
-    if (Math.random() < env.PAYMENT_FAILURE_RATE) {
-      throw new TransientPaymentError(
-        `gateway de pagamento indisponivel (tentativa ${attempt})`
-      );
-    }
-
-    // Caso 2: recusa por valor. Grava REJECTED e encerra, sem retentativa.
+    // Recusa por valor: regra da loja, nem chega a falar com o PayPal
     if (event.totalAmount > env.PAYMENT_MAX_AMOUNT) {
       const payment = await this.persist({
         orderId: event.orderId,
@@ -45,21 +50,168 @@ export class PaymentService {
         status: 'REJECTED',
         reason: `valor acima do limite autorizado de R$ ${env.PAYMENT_MAX_AMOUNT.toFixed(2)}`,
         attempts: attempt,
+        paypalOrderId: null,
       });
       return { payment, created: true };
     }
 
-    // Caso 3: passou
+    let paypalOrderId: string;
+    try {
+      const order = await paypalClient.createOrder(event.orderId, event.totalAmount);
+      paypalOrderId = order.id;
+    } catch (err) {
+      if (err instanceof PayPalApiError) {
+        // O PayPal recusou a ordem (dados invalidos, moeda, etc.): definitivo
+        const payment = await this.persist({
+          orderId: event.orderId,
+          userId: event.userId,
+          amount: event.totalAmount,
+          status: 'REJECTED',
+          reason: err.message,
+          attempts: attempt,
+          paypalOrderId: null,
+        });
+        return { payment, created: true };
+      }
+
+      // Gateway fora, lento ou circuito aberto: nada gravado, o RabbitMQ
+      // reentrega depois pela fila de retry. Com o breaker aberto isso nem
+      // gasta uma chamada HTTP.
+      const motivo = err instanceof CircuitOpenError ? 'circuit breaker aberto' : (err as Error).message;
+      throw new TransientPaymentError(
+        `gateway PayPal indisponível (tentativa ${attempt}): ${motivo}`
+      );
+    }
+
     const payment = await this.persist({
       orderId: event.orderId,
       userId: event.userId,
       amount: event.totalAmount,
-      status: 'APPROVED',
+      status: 'PENDING_APPROVAL',
       reason: null,
       attempts: attempt,
+      paypalOrderId,
     });
 
     return { payment, created: true };
+  }
+
+  // O comprador "aprovou" na tela do PayPal (simulada no frontend).
+  // decision = DECLINE simula o cartao/saldo sendo recusado na captura.
+  async approve(
+    orderId: string,
+    userId: string,
+    role: string | undefined,
+    decision: PayerDecision
+  ): Promise<Payment> {
+    const payment = await this.getByOrderId(orderId, userId, role);
+
+    // Ja finalizado: so republica o resultado. Cobre o caso em que a
+    // captura deu certo mas o publish falhou na chamada anterior.
+    if (payment.status !== 'PENDING_APPROVAL') {
+      await this.publishOrFail(payment);
+      return payment;
+    }
+
+    if (!payment.paypal_order_id) {
+      throw new AppError(409, 'Pagamento sem ordem PayPal associada');
+    }
+
+    let finalized: Payment;
+    try {
+      await paypalClient.simulatePayerApproval(payment.paypal_order_id, decision);
+      const captured = await paypalClient.captureOrder(payment.paypal_order_id);
+      const captureId =
+        captured.purchase_units[0]?.payments?.captures?.[0]?.id ?? null;
+      finalized = await this.finalize(orderId, 'APPROVED', null, captureId);
+    } catch (err) {
+      if (err instanceof PayPalApiError) {
+        if (err.issue === 'ORDER_ALREADY_CAPTURED') {
+          finalized = await this.finalize(orderId, 'APPROVED', null, null);
+        } else {
+          const reason =
+            err.issue === 'INSTRUMENT_DECLINED'
+              ? 'PayPal recusou o meio de pagamento (INSTRUMENT_DECLINED)'
+              : err.message;
+          finalized = await this.finalize(orderId, 'REJECTED', reason, null);
+        }
+      } else if (err instanceof CircuitOpenError) {
+        throw new AppError(
+          503,
+          `Gateway PayPal temporariamente indisponível (circuit breaker aberto). ` +
+            `Tente novamente em ${Math.ceil(err.retryAfterMs / 1000)}s.`,
+          { circuitBreaker: err.breaker, retryAfterMs: err.retryAfterMs }
+        );
+      } else {
+        throw new AppError(502, `Falha ao falar com o gateway PayPal: ${(err as Error).message}`);
+      }
+    }
+
+    await this.publishOrFail(finalized);
+    return finalized;
+  }
+
+  // Comprador desistiu na tela do PayPal
+  async cancel(orderId: string, userId: string, role?: string): Promise<Payment> {
+    const payment = await this.getByOrderId(orderId, userId, role);
+
+    if (payment.status !== 'PENDING_APPROVAL') {
+      await this.publishOrFail(payment);
+      return payment;
+    }
+
+    const finalized = await this.finalize(
+      orderId,
+      'REJECTED',
+      'pagamento cancelado pelo comprador no PayPal',
+      null
+    );
+    await this.publishOrFail(finalized);
+    return finalized;
+  }
+
+  // O pagamento ja esta salvo. Se o broker estiver fora, avisamos o cliente
+  // para tentar de novo: a proxima chamada cai no "ja finalizado" e republica.
+  private async publishOrFail(payment: Payment): Promise<void> {
+    try {
+      await paymentPublisher.publishResult(payment);
+    } catch (err) {
+      console.error(
+        `[payments-service] Pagamento ${payment.id} salvo como ${payment.status}, ` +
+          `mas o evento não foi publicado: ${(err as Error).message}`
+      );
+      throw new AppError(
+        503,
+        'Pagamento registrado, mas o pedido ainda não foi notificado. Tente novamente em instantes.'
+      );
+    }
+  }
+
+  // Sai de PENDING_APPROVAL uma unica vez. Se duas abas clicarem ao mesmo
+  // tempo, so uma faz o UPDATE; a outra recebe o que a primeira gravou.
+  private async finalize(
+    orderId: string,
+    status: Exclude<PaymentStatus, 'PENDING_APPROVAL'>,
+    reason: string | null,
+    captureId: string | null
+  ): Promise<Payment> {
+    const result = await pool.query(
+      `UPDATE payments
+       SET status = $1, reason = $2, paypal_capture_id = COALESCE($3, paypal_capture_id),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE order_id = $4 AND status = 'PENDING_APPROVAL'
+       RETURNING ${COLUMNS}`,
+      [status, reason, captureId, orderId]
+    );
+
+    if (result.rowCount === 0) {
+      const current = await this.findByOrderId(orderId);
+      if (!current) throw new AppError(404, 'Pagamento não encontrado para este pedido');
+      return current;
+    }
+
+    console.log(`[payments-service] Pagamento do pedido ${orderId} finalizado como ${status}`);
+    return this.mapRow(result.rows[0]);
   }
 
   private async persist(data: {
@@ -69,12 +221,13 @@ export class PaymentService {
     status: PaymentStatus;
     reason: string | null;
     attempts: number;
+    paypalOrderId: string | null;
   }): Promise<Payment> {
     const query = `
-      INSERT INTO payments (id, order_id, user_id, amount, status, reason, attempts)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO payments (id, order_id, user_id, amount, status, method, reason, attempts, paypal_order_id)
+      VALUES ($1, $2, $3, $4, $5, 'PAYPAL', $6, $7, $8)
       ON CONFLICT (order_id) DO NOTHING
-      RETURNING id, order_id, user_id, amount, status, reason, attempts, created_at, updated_at
+      RETURNING ${COLUMNS}
     `;
     const result = await pool.query(query, [
       randomUUID(),
@@ -84,6 +237,7 @@ export class PaymentService {
       data.status,
       data.reason,
       data.attempts,
+      data.paypalOrderId,
     ]);
 
     // Com mais de uma replica do servico, dois consumidores podem pegar o
@@ -100,12 +254,7 @@ export class PaymentService {
   }
 
   async findByOrderId(orderId: string): Promise<Payment | null> {
-    const query = `
-      SELECT id, order_id, user_id, amount, status, reason, attempts, created_at, updated_at
-      FROM payments
-      WHERE order_id = $1
-    `;
-    const result = await pool.query(query, [orderId]);
+    const result = await pool.query(`SELECT ${COLUMNS} FROM payments WHERE order_id = $1`, [orderId]);
     return result.rows.length > 0 ? this.mapRow(result.rows[0]) : null;
   }
 
@@ -124,13 +273,10 @@ export class PaymentService {
   }
 
   async listByUser(userId: string): Promise<Payment[]> {
-    const query = `
-      SELECT id, order_id, user_id, amount, status, reason, attempts, created_at, updated_at
-      FROM payments
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-    `;
-    const result = await pool.query(query, [userId]);
+    const result = await pool.query(
+      `SELECT ${COLUMNS} FROM payments WHERE user_id = $1 ORDER BY created_at DESC`,
+      [userId]
+    );
     return result.rows.map((row) => this.mapRow(row));
   }
 
@@ -141,8 +287,11 @@ export class PaymentService {
       user_id: row.user_id as string,
       amount: Number(row.amount),
       status: row.status as PaymentStatus,
+      method: ((row.method as string) ?? 'PAYPAL') as Payment['method'],
       reason: (row.reason as string | null) ?? null,
       attempts: Number(row.attempts),
+      paypal_order_id: (row.paypal_order_id as string | null) ?? null,
+      paypal_capture_id: (row.paypal_capture_id as string | null) ?? null,
       created_at: row.created_at as Date,
       updated_at: row.updated_at as Date,
     };

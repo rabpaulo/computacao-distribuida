@@ -1908,3 +1908,310 @@ input, select, textarea {
     align-items: flex-start;
   }
 }
+
+/* ============================================================================
+   Circuit breaker no monitor do cluster
+   ============================================================================ */
+.cb-state {
+  font-weight: 700;
+}
+.cb-state.cb-closed { color: #34d399; }
+.cb-state.cb-half_open { color: #fbbf24; }
+.cb-state.cb-open { color: #f87171; }
+
+/* ============================================================================
+   Checkout PayPal (simulado)
+   ============================================================================ */
+.paypal-backdrop {
+  z-index: 70;
+}
+
+.sandbox-tag {
+  font-size: 0.62rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  border: 1px solid var(--warning-border);
+}
+
+.paypal-body {
+  padding: 18px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.paypal-disclaimer {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.paypal-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-page);
+}
+
+.paypal-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.paypal-summary strong {
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.paypal-summary .mono {
+  font-family: var(--font-mono);
+}
+
+.paypal-amount {
+  grid-column: 1 / -1;
+}
+
+.paypal-amount strong {
+  font-size: 1.35rem;
+  font-family: var(--font-mono);
+}
+
+.paypal-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.paypal-account {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.paypal-error {
+  margin: 0;
+}
+
+.paypal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn-paypal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--tech-blue);
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.btn-paypal:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.btn-paypal:disabled,
+.paypal-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-paypal-inline {
+  margin-top: 12px;
+}
+
+.paypal-actions .btn-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-link-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--danger-text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px;
+}
+
+.order-reason {
+  margin-top: 10px;
+  font-size: 0.75rem;
+  color: var(--danger-text);
+}
+
+/* ============================================================================
+   Rastreamento da entrega (IoT / MQTT)
+   ============================================================================ */
+.shipment-box {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--tech-blue-border);
+  background: var(--tech-blue-subtle);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shipment-waiting {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--tech-blue-text);
+}
+
+.shipment-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.shipment-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--tech-blue-text);
+  font-family: var(--font-mono);
+}
+
+.shipment-mqtt-tag {
+  font-size: 0.6rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--tech-blue-text);
+  border: 1px solid var(--tech-blue-border);
+  border-radius: var(--radius-full);
+  padding: 1px 6px;
+  background: var(--bg-surface);
+}
+
+.shipment-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.shipment-step {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.shipment-step.done {
+  color: var(--tech-blue-text);
+  font-weight: 600;
+}
+
+.step-dot {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shipment-step.current .step-dot {
+  background: var(--tech-blue);
+  border-color: var(--tech-blue);
+}
+
+.shipment-progress {
+  height: 5px;
+  background: var(--tech-blue-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.shipment-progress-fill {
+  height: 100%;
+  background: var(--tech-blue);
+  transition: width 1.5s linear;
+}
+
+.route-map {
+  width: 100%;
+  height: auto;
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--tech-blue-border);
+}
+
+.route-line {
+  stroke: var(--tech-blue-border);
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+}
+
+.route-origin { fill: var(--text-muted); }
+.route-destination { fill: var(--success); }
+.route-truck {
+  fill: var(--tech-blue);
+  stroke: var(--bg-surface);
+  stroke-width: 2;
+  transition: cx 1.5s linear, cy 1.5s linear;
+}
+.route-truck.done { fill: var(--success); }
+
+.route-label {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  fill: var(--text-muted);
+}
+
+.shipment-sensors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.shipment-sensors span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.shipment-sensors .sensor-alert {
+  color: var(--danger-text);
+  font-weight: 700;
+}
