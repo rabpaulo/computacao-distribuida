@@ -1,7 +1,10 @@
 // PENDING_APPROVAL: ordem criada no PayPal, esperando o comprador aprovar
 export type PaymentStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
 
-export type PaymentMethod = 'PAYPAL';
+// Todos simulados: a captura passa sempre pelo paypal-mock, o metodo so e registrado
+export type PaymentMethod = 'PAYPAL' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'PIX' | 'BOLETO';
+
+export const PAYMENT_METHODS: PaymentMethod[] = ['PAYPAL', 'CREDIT_CARD', 'DEBIT_CARD', 'PIX', 'BOLETO'];
 
 export interface Payment {
   id: string;

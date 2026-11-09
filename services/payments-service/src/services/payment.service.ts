@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { pool } from '../config/database';
 import { env } from '../config/env';
-import { Payment, PaymentStatus } from '../models/payment.model';
+import { Payment, PaymentMethod, PaymentStatus } from '../models/payment.model';
 import { AppError } from '../middlewares/error.middleware';
 import { OrderCreatedEvent } from '../messaging/events';
 import { paymentPublisher } from '../messaging/payment.publisher';
@@ -102,7 +102,8 @@ export class PaymentService {
     orderId: string,
     userId: string,
     role: string | undefined,
-    decision: PayerDecision
+    decision: PayerDecision,
+    method: PaymentMethod = 'PAYPAL'
   ): Promise<Payment> {
     const payment = await this.getByOrderId(orderId, userId, role);
 
@@ -123,17 +124,17 @@ export class PaymentService {
       const captured = await paypalClient.captureOrder(payment.paypal_order_id);
       const captureId =
         captured.purchase_units[0]?.payments?.captures?.[0]?.id ?? null;
-      finalized = await this.finalize(orderId, 'APPROVED', null, captureId);
+      finalized = await this.finalize(orderId, 'APPROVED', null, captureId, method);
     } catch (err) {
       if (err instanceof PayPalApiError) {
         if (err.issue === 'ORDER_ALREADY_CAPTURED') {
-          finalized = await this.finalize(orderId, 'APPROVED', null, null);
+          finalized = await this.finalize(orderId, 'APPROVED', null, null, method);
         } else {
           const reason =
             err.issue === 'INSTRUMENT_DECLINED'
-              ? 'PayPal recusou o meio de pagamento (INSTRUMENT_DECLINED)'
+              ? 'Meio de pagamento recusado (INSTRUMENT_DECLINED)'
               : err.message;
-          finalized = await this.finalize(orderId, 'REJECTED', reason, null);
+          finalized = await this.finalize(orderId, 'REJECTED', reason, null, method);
         }
       } else if (err instanceof CircuitOpenError) {
         throw new AppError(
@@ -193,15 +194,16 @@ export class PaymentService {
     orderId: string,
     status: Exclude<PaymentStatus, 'PENDING_APPROVAL'>,
     reason: string | null,
-    captureId: string | null
+    captureId: string | null,
+    method?: PaymentMethod
   ): Promise<Payment> {
     const result = await pool.query(
       `UPDATE payments
        SET status = $1, reason = $2, paypal_capture_id = COALESCE($3, paypal_capture_id),
-           updated_at = CURRENT_TIMESTAMP
+           method = COALESCE($5, method), updated_at = CURRENT_TIMESTAMP
        WHERE order_id = $4 AND status = 'PENDING_APPROVAL'
        RETURNING ${COLUMNS}`,
-      [status, reason, captureId, orderId]
+      [status, reason, captureId, orderId, method ?? null]
     );
 
     if (result.rowCount === 0) {

@@ -64,12 +64,14 @@ export interface ServiceHealth {
   };
 }
 
+export type PaymentMethod = 'PAYPAL' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'PIX' | 'BOLETO';
+
 export interface Payment {
   id: string;
   order_id: string;
   amount: number;
   status: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
-  method: 'PAYPAL';
+  method: PaymentMethod;
   reason: string | null;
   paypal_order_id: string | null;
   paypal_capture_id: string | null;

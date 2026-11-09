@@ -2215,3 +2215,34 @@ input, select, textarea {
   color: var(--danger-text);
   font-weight: 700;
 }
+
+/* ---- Selecao de forma de pagamento (simulada) ---- */
+.pay-methods { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.pay-method {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px;
+  border: 1px solid var(--border-color, #334155); border-radius: 8px;
+  background: transparent; color: inherit; cursor: pointer; font-size: 0.85rem;
+}
+.pay-method.active { border-color: #3b82f6; background: rgba(59, 130, 246, 0.15); font-weight: 600; }
+.pay-method:disabled { opacity: 0.5; cursor: not-allowed; }
+.pay-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.pay-form label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; opacity: 0.9; }
+.pay-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pay-input {
+  padding: 9px 10px; border-radius: 8px; border: 1px solid var(--border-color, #334155);
+  background: rgba(15, 23, 42, 0.4); color: inherit; font-size: 0.95rem;
+}
+.pay-pix { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 12px; flex-wrap: wrap; }
+.pay-qr {
+  display: grid; grid-template-columns: repeat(13, 8px); grid-auto-rows: 8px; gap: 0;
+  padding: 8px; background: #fff; border-radius: 6px;
+}
+.pay-qr i { background: #fff; }
+.pay-qr i.on { background: #0f172a; }
+.pay-code-box, .pay-boleto { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 180px; margin-bottom: 12px; }
+.pay-code { display: block; word-break: break-all; font-size: 0.75rem; padding: 8px; border-radius: 6px; background: rgba(15, 23, 42, 0.5); }
+.btn-copy {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+  border: 1px solid var(--border-color, #334155); border-radius: 6px; background: transparent;
+  color: inherit; cursor: pointer; font-size: 0.78rem;
+}

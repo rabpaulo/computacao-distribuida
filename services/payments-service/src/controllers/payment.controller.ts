@@ -17,6 +17,8 @@ export const approvePayPalSchema = z.object({
     .object({
       // DECLINE simula o PayPal recusando o meio de pagamento na captura
       decision: z.enum(['APPROVE', 'DECLINE']).default('APPROVE'),
+      // Metodo escolhido na tela. Dados de cartao NUNCA chegam aqui.
+      method: z.enum(['PAYPAL', 'CREDIT_CARD', 'DEBIT_CARD', 'PIX', 'BOLETO']).default('PAYPAL'),
     })
     .default({}),
 });
@@ -33,7 +35,8 @@ export class PaymentController {
         req.params.orderId,
         req.user.userId,
         req.user.role,
-        req.body?.decision === 'DECLINE' ? 'DECLINE' : 'APPROVE'
+        req.body?.decision === 'DECLINE' ? 'DECLINE' : 'APPROVE',
+        req.body?.method ?? 'PAYPAL'
       );
 
       res.status(200).json({ status: 'success', data: { payment } });

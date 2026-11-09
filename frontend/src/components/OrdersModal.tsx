@@ -185,7 +185,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({ isOpen, onClose }) => 
 
                     {awaitingPayer(order) && (
                       <button className="btn-paypal btn-paypal-inline" onClick={() => setCheckoutOrder(order)}>
-                        <Wallet size={15} /> Pagar com PayPal
+                        <Wallet size={15} /> Pagar pedido
                       </button>
                     )}
 

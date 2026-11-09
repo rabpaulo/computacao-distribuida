@@ -1,4 +1,4 @@
-import { Order, Payment, Product, ServiceHealth, Shipment, User } from '../types';
+import { Order, Payment, PaymentMethod, Product, ServiceHealth, Shipment, User } from '../types';
 
 const API_BASE = '/api/v1';
 
@@ -146,11 +146,16 @@ export const api = {
   },
 
   // Comprador aprovou na tela do PayPal. DECLINE simula o cartão recusado.
-  async approvePayPal(orderId: string, decision: 'APPROVE' | 'DECLINE'): Promise<Payment> {
+  // `method` e so o rotulo escolhido na tela; dados de cartao nao saem do navegador.
+  async approvePayPal(
+    orderId: string,
+    decision: 'APPROVE' | 'DECLINE',
+    method: PaymentMethod = 'PAYPAL'
+  ): Promise<Payment> {
     const res = await fetch(`${API_BASE}/payments/order/${orderId}/paypal/approve`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({ decision, method }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Erro ao confirmar pagamento no PayPal');
