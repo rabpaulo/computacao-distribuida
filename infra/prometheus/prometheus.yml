@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: districommerce
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['api-gateway:8000']
+        labels: { app: api-gateway }
+      - targets: ['users-service:3001']
+        labels: { app: users-service }
+      - targets: ['products-service:3002']
+        labels: { app: products-service }
+      - targets: ['orders-service:3003']
+        labels: { app: orders-service }
+      - targets: ['payments-service:3004']
+        labels: { app: payments-service }
+      - targets: ['logistics-service:3005']
+        labels: { app: logistics-service }
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

@@ -4,11 +4,14 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { env } from './config/env';
+import { metricsMiddleware, metricsHandler } from './metrics';
 
 const app = express();
 
 // Middlewares de segurança e auditoria
 app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(metricsMiddleware);
+app.get('/metrics', metricsHandler);
 app.use(cors({ origin: env.CLIENT_ORIGIN, credentials: true }));
 app.use(morgan('dev'));
 

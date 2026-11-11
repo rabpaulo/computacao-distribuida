@@ -38,3 +38,5 @@ coverage/
 # Bancos de dados locais / Volumes temporários
 data/
 *.sqlite
+loadtest/results/*
+!loadtest/results/.gitkeep

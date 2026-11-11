@@ -75,6 +75,10 @@ A plataforma adota uma arquitetura de microsserviços desacoplada, orientada a c
 | orders-service → logistics-service | **Assíncrona** | RabbitMQ (`order.confirmed`) | Pedido pago vira entrega sem acoplar os dois serviços |
 | logistics-service ⇄ caminhões | **Assíncrona** | **MQTT** (Mosquitto) | Dispositivos IoT com rede instável: protocolo leve, QoS, Last Will |
 
+### Semana 7: CI/CD, Monitoramento e Testes de Carga
+
+Pipeline no GitHub Actions, Prometheus + Grafana (http://localhost:3100) e testes de carga com k6. Detalhes e comandos em [`docs/SEMANA-7.md`](docs/SEMANA-7.md).
+
 ### Semanas 5-6: Resiliência, PayPal e IoT
 
 ```

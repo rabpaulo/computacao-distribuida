@@ -357,6 +357,60 @@ services:
     networks:
       - districommerce-network
 
+  # ============================================================================
+  # 10. Observabilidade: Prometheus (coleta) + Grafana (dashboards)
+  # ============================================================================
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: districommerce-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - districommerce-network
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: districommerce-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3100:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - districommerce-network
+
+  # Teste de carga (só roda sob demanda):  docker compose --profile loadtest run --rm k6
+  k6:
+    image: grafana/k6:0.54.0
+    profiles: ["loadtest"]
+    container_name: districommerce-k6
+    command: run /scripts/districommerce.js --summary-export=/results/summary.json
+    environment:
+      BASE_URL: http://api-gateway:8000
+      PROFILE: ${PROFILE:-load}
+    volumes:
+      - ./loadtest/k6:/scripts:ro
+      - ./loadtest/results:/results
+    depends_on:
+      - api-gateway
+    networks:
+      - districommerce-network
+
 volumes:
   postgres_data:
     name: districommerce_postgres_data
@@ -366,6 +420,10 @@ volumes:
     name: districommerce_rabbitmq_data
   mosquitto_data:
     name: districommerce_mosquitto_data
+  prometheus_data:
+    name: districommerce_prometheus_data
+  grafana_data:
+    name: districommerce_grafana_data
 
 networks:
   districommerce-network:
