@@ -18,7 +18,7 @@ jobs:
     name: Build & Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -60,7 +60,7 @@ jobs:
     env:
       PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Nome da imagem em minúsculas
         run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/districommerce-${{ matrix.service.name }}" >> "$GITHUB_ENV"
