@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
+import { NotificationProvider } from './context/NotificationContext';
 import { Navbar } from './components/Navbar';
 import { ClusterStatus } from './components/ClusterStatus';
 import { ProductGrid } from './components/ProductGrid';
@@ -8,6 +9,9 @@ import { CartDrawer } from './components/CartDrawer';
 import { AuthModal } from './components/AuthModal';
 import { CreateProductModal } from './components/CreateProductModal';
 import { OrdersModal } from './components/OrdersModal';
+import { ToastStack } from './components/ToastStack';
+import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
+import { PrivacyCenterModal } from './components/PrivacyCenterModal';
 import { ShieldCheck, Database, Server, Terminal, Network } from 'lucide-react';
 
 const AppContent: React.FC = () => {
@@ -15,6 +19,8 @@ const AppContent: React.FC = () => {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isCreateProductOpen, setIsCreateProductOpen] = useState(false);
   const [isOrdersOpen, setIsOrdersOpen] = useState(false);
+  const [isPolicyOpen, setIsPolicyOpen] = useState(false);
+  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleRefreshProducts = () => {
@@ -33,6 +39,7 @@ const AppContent: React.FC = () => {
         onOpenAuth={() => setIsAuthOpen(true)}
         onOpenCreateProduct={() => setIsCreateProductOpen(true)}
         onOpenOrders={() => setIsOrdersOpen(true)}
+        onOpenPrivacy={() => setIsPrivacyOpen(true)}
       />
 
       <main className="main-content">
@@ -136,13 +143,27 @@ const AppContent: React.FC = () => {
       />
 
       {/* Modais do Sistema */}
-      <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onOpenPolicy={() => setIsPolicyOpen(true)}
+      />
       <CreateProductModal
         isOpen={isCreateProductOpen}
         onClose={() => setIsCreateProductOpen(false)}
         onProductCreated={handleRefreshProducts}
       />
       <OrdersModal isOpen={isOrdersOpen} onClose={() => setIsOrdersOpen(false)} />
+      <PrivacyCenterModal
+        isOpen={isPrivacyOpen}
+        onClose={() => setIsPrivacyOpen(false)}
+        onOpenPolicy={() => setIsPolicyOpen(true)}
+      />
+      {/* A política fica por último: abre por cima do cadastro e da central de privacidade */}
+      <PrivacyPolicyModal isOpen={isPolicyOpen} onClose={() => setIsPolicyOpen(false)} />
+
+      {/* Avisos em tempo real (pedido pago, a caminho, entregue...) */}
+      <ToastStack />
 
       {/* Rodapé Informativo */}
       <footer className="app-footer">
@@ -150,6 +171,11 @@ const AppContent: React.FC = () => {
           <p>© 2026 DistriCommerce — Projeto Final de Sistemas Distribuídos (Prof. Ildo Vieira)</p>
           <p className="footer-subtext">
             Construído em TypeScript, React, Express, MongoDB, PostgreSQL, Docker e Kubernetes.
+          </p>
+          <p className="footer-subtext">
+            <button type="button" className="footer-link" onClick={() => setIsPolicyOpen(true)}>
+              Política de Privacidade
+            </button>
           </p>
         </div>
       </footer>
@@ -160,9 +186,11 @@ const AppContent: React.FC = () => {
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      <CartProvider>
-        <AppContent />
-      </CartProvider>
+      <NotificationProvider>
+        <CartProvider>
+          <AppContent />
+        </CartProvider>
+      </NotificationProvider>
     </AuthProvider>
   );
 };

@@ -1,0 +1,36 @@
+import express, { Application } from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import notificationRoutes from './routes/notification.routes';
+import healthRoutes from './routes/health.routes';
+import { metricsMiddleware, metricsHandler } from './metrics';
+import { errorHandler } from './middlewares/error.middleware';
+
+export function createApp(): Application {
+  const app = express();
+
+  app.use(helmet());
+  app.use(metricsMiddleware);
+  app.use(cors());
+  app.use(express.json({ limit: '100kb' }));
+
+  if (process.env.NODE_ENV !== 'test') {
+    app.use(morgan('combined'));
+  }
+
+  app.use('/', healthRoutes);
+  app.get('/metrics', metricsHandler);
+  app.use('/api/v1/notifications', notificationRoutes);
+
+  app.use('*', (_req, res) => {
+    res.status(404).json({
+      status: 'error',
+      message: 'Recurso não encontrado no notifications-service',
+    });
+  });
+
+  app.use(errorHandler);
+
+  return app;
+}

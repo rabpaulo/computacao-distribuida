@@ -39,3 +39,7 @@ data:
   RABBITMQ_PREFETCH: "10"
   RABBITMQ_MAX_RETRIES: "3"
   RABBITMQ_RETRY_DELAY_MS: "5000"
+  # Notificações (LGPD: retenção em dias)
+  NOTIFICATIONS_RETENTION_DAYS: "90"
+  # Política de Privacidade vigente (gravada no consentimento do cadastro)
+  PRIVACY_POLICY_VERSION: "1.0"

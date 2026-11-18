@@ -11,6 +11,7 @@ const envSchema = z.object({
   ORDERS_SERVICE_URL: z.string().default('http://localhost:3003'),
   PAYMENTS_SERVICE_URL: z.string().default('http://localhost:3004'),
   LOGISTICS_SERVICE_URL: z.string().default('http://localhost:3005'),
+  NOTIFICATIONS_SERVICE_URL: z.string().default('http://localhost:3007'),
   CLIENT_ORIGIN: z.string().default('*'),
 });
 

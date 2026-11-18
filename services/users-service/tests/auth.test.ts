@@ -49,6 +49,7 @@ describe('Users Service - Testes Unitários e de Integração', () => {
           name: 'João Silva',
           email: 'email-invalido',
           password: '123456SenhaValida',
+          acceptTerms: true,
         });
 
       expect(response.status).toBe(400);
@@ -63,6 +64,7 @@ describe('Users Service - Testes Unitários e de Integração', () => {
           name: 'João Silva',
           email: 'joao@example.com',
           password: '123',
+          acceptTerms: true,
         });
 
       expect(response.status).toBe(400);
@@ -91,6 +93,7 @@ describe('Users Service - Testes Unitários e de Integração', () => {
           name: 'Carlos Oliveira',
           email: 'carlos@example.com',
           password: 'senhaSegura123',
+          acceptTerms: true,
         });
 
       expect(response.status).toBe(201);
@@ -98,6 +101,32 @@ describe('Users Service - Testes Unitários e de Integração', () => {
       expect(response.body.data.user.email).toBe('carlos@example.com');
       expect(response.body.data.user).not.toHaveProperty('password_hash');
       expect(response.body.data.token).toBeDefined();
+
+      // LGPD: o consentimento fica gravado (quando e qual versão da política)
+      const insert = (pool.query as any).mock.calls[1];
+      expect(insert[0]).toContain('consent_at');
+      expect(insert[0]).toContain('consent_version');
+      expect(insert[1]).toContain(env.PRIVACY_POLICY_VERSION);
+    });
+
+    it.each([
+      ['sem o campo acceptTerms', {}],
+      ['com acceptTerms false', { acceptTerms: false }],
+      ['com acceptTerms como texto "true"', { acceptTerms: 'true' }],
+    ])('deve rejeitar cadastro %s (LGPD: consentimento explícito)', async (_nome, extra) => {
+      const response = await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          name: 'Carlos Oliveira',
+          email: 'carlos@example.com',
+          password: 'senhaSegura123',
+          ...extra,
+        });
+
+      expect(response.status).toBe(400);
+      expect(JSON.stringify(response.body.errors)).toContain('Política de Privacidade');
+      // nem chegou a consultar o banco
+      expect(pool.query).not.toHaveBeenCalled();
     });
 
     it('deve autenticar usuário válido no login', async () => {

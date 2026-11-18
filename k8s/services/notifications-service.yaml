@@ -1,0 +1,133 @@
+# ==============================================================================
+# notifications-service - Notificações em tempo real
+#
+# Consome order.created, order.confirmed, payment.*, shipment.* e user.deleted
+# (RabbitMQ) e avisa o cliente por Server-Sent Events.
+#
+# 1 réplica DE PROPÓSITO e sem HPA: as conexões SSE ficam na memória do pod. Com
+# várias réplicas, o evento é consumido por uma só e apenas os clientes ligados a
+# ela receberiam o push na hora. Para escalar este serviço seria preciso um
+# fan-out entre réplicas (ex.: Redis Pub/Sub). Veja docs/NOTIFICACOES-E-LGPD.md.
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notifications-service
+  namespace: districommerce
+  labels:
+    app: notifications-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notifications-service
+  template:
+    metadata:
+      labels:
+        app: notifications-service
+    spec:
+      containers:
+        - name: notifications-service
+          image: districommerce/notifications-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3007
+              name: http
+          env:
+            - name: PORT
+              value: "3007"
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: NODE_ENV
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_PORT
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_USER
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_NAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: POSTGRES_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: JWT_SECRET
+            - name: RABBITMQ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: RABBITMQ_URL
+            - name: RABBITMQ_PREFETCH
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: RABBITMQ_PREFETCH
+            - name: RABBITMQ_MAX_RETRIES
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: RABBITMQ_MAX_RETRIES
+            - name: RABBITMQ_RETRY_DELAY_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: RABBITMQ_RETRY_DELAY_MS
+            - name: NOTIFICATIONS_RETENTION_DAYS
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: NOTIFICATIONS_RETENTION_DAYS
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3007
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3007
+            initialDelaySeconds: 20
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notifications-service
+  namespace: districommerce
+  labels:
+    app: notifications-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3007
+      targetPort: 3007
+      name: http
+  selector:
+    app: notifications-service

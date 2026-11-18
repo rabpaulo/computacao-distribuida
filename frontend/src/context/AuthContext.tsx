@@ -8,8 +8,18 @@ interface AuthContextType {
   isLoading: boolean;
   isAdmin: boolean;
   login: (email: string, pass: string) => Promise<void>;
-  register: (name: string, email: string, pass: string, role?: UserRole) => Promise<void>;
+  register: (
+    name: string,
+    email: string,
+    pass: string,
+    role: UserRole | undefined,
+    acceptTerms: boolean
+  ) => Promise<void>;
   logout: () => void;
+  // LGPD: exclui a conta (pede a senha de novo) e encerra a sessão
+  deleteAccount: (password: string) => Promise<void>;
+  // LGPD: correção do nome
+  updateName: (name: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,7 +39,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const profile = await api.getProfile();
         setUser(profile);
       } catch (err) {
-        console.warn('Sessão expirada ou token inválido');
+        // Também cai aqui quando a conta foi removida (a API responde 410)
+        console.warn('Sessão expirada, token inválido ou conta removida');
         logout();
       } finally {
         setIsLoading(false);
@@ -45,8 +56,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(res.user);
   };
 
-  const register = async (name: string, email: string, pass: string, role?: UserRole) => {
-    const res = await api.register({ name, email, password: pass, role });
+  const register = async (
+    name: string,
+    email: string,
+    pass: string,
+    role: UserRole | undefined,
+    acceptTerms: boolean
+  ) => {
+    const res = await api.register({ name, email, password: pass, role, acceptTerms });
     localStorage.setItem('districommerce_token', res.token);
     setToken(res.token);
     setUser(res.user);
@@ -54,14 +71,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     localStorage.removeItem('districommerce_token');
+    // O carrinho fica no navegador; numa conta excluída não faz sentido deixá-lo para trás
     setToken(null);
     setUser(null);
+  };
+
+  const deleteAccount = async (password: string) => {
+    await api.deleteMyAccount(password);
+    localStorage.removeItem('districommerce_cart');
+    logout();
+  };
+
+  const updateName = async (name: string) => {
+    const updated = await api.updateProfileName(name);
+    setUser(updated);
   };
 
   const isAdmin = user?.role === 'ROLE_ADMIN';
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, isAdmin, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, token, isLoading, isAdmin, login, register, logout, deleteAccount, updateName }}
+    >
       {children}
     </AuthContext.Provider>
   );

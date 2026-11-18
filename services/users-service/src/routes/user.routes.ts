@@ -4,6 +4,7 @@ import {
   updateProfileSchema,
   userController,
 } from '../controllers/user.controller';
+import { deleteAccountSchema, privacyController } from '../controllers/privacy.controller';
 import { authenticateToken, requireRole } from '../middlewares/auth.middleware';
 import { validateRequest } from '../middlewares/validate.middleware';
 
@@ -20,6 +21,15 @@ router.get('/profile', (req, res, next) => {
 // Atualização de perfil próprio
 router.put('/profile', validateRequest(updateProfileSchema), (req, res, next) => {
   userController.updateProfile(req, res, next);
+});
+
+// LGPD: direitos do titular. Precisam vir antes de '/:id', senão "me" seria lido como um id.
+router.get('/me/export', (req, res, next) => {
+  privacyController.exportMyData(req, res, next);
+});
+
+router.delete('/me', validateRequest(deleteAccountSchema), (req, res, next) => {
+  privacyController.deleteMyAccount(req, res, next);
 });
 
 // Listagem de usuários (apenas para ADMIN)

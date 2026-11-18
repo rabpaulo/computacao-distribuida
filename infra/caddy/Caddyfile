@@ -1,4 +1,7 @@
 districommerce.duckdns.org {
     encode gzip
-    reverse_proxy frontend:3000
+    # flush_interval -1: repassa cada evento SSE na hora, sem esperar encher buffer
+    reverse_proxy frontend:3000 {
+        flush_interval -1
+    }
 }

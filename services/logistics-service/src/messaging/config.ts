@@ -1,6 +1,7 @@
 // Nomes de exchange, fila e routing key ficam todos aqui para os servicos
 // usarem as mesmas constantes e nao sair string solta pelo codigo.
-// O arquivo e identico no orders-service, payments-service e logistics-service.
+// E igual no orders-service, payments-service e logistics-service, exceto pelas
+// routing keys SHIPMENT_*, que so o logistics-service publica.
 
 export const EXCHANGES = {
   // Por onde passam todos os eventos de dominio
@@ -19,6 +20,11 @@ export const ROUTING_KEYS = {
   PAYMENT_REJECTED: 'payment.rejected',
   // Curinga do AMQP, pega approved e rejected de uma vez
   PAYMENT_ALL: 'payment.*',
+  // Publicados por ESTE serviço quando a entrega muda de status. Quem consome
+  // (notifications-service) assina shipment.*; nenhum serviço é chamado direto.
+  SHIPMENT_ASSIGNED: 'shipment.assigned',
+  SHIPMENT_IN_TRANSIT: 'shipment.in_transit',
+  SHIPMENT_DELIVERED: 'shipment.delivered',
 } as const;
 
 export const QUEUES = {

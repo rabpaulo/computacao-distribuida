@@ -28,6 +28,13 @@ export async function initDatabase(): Promise<void> {
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+    -- LGPD: prova do consentimento (quando e qual versão da política) e marca de
+    -- conta anonimizada (direito de eliminação). IF NOT EXISTS: contas antigas
+    -- ficam com esses campos nulos.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS consent_at TIMESTAMP WITH TIME ZONE;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS consent_version VARCHAR(20);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS anonymized_at TIMESTAMP WITH TIME ZONE;
   `;
 
   await pool.query(query);

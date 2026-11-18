@@ -42,8 +42,14 @@ function routeLabel(req: Request, statusCode: number): string {
   return normalizePath(req.originalUrl.split('?')[0]);
 }
 
+// Conexão Server-Sent Events fica aberta por minutos. Se entrasse na conta, o
+// gauge de requisições em andamento nunca desceria (o 'finish' só dispara no fim).
+function isLongLived(req: Request): boolean {
+  return req.originalUrl.split('?')[0].endsWith('/notifications/stream');
+}
+
 export function metricsMiddleware(req: Request, res: Response, next: NextFunction): void {
-  if (req.path === '/metrics') {
+  if (req.path === '/metrics' || isLongLived(req)) {
     next();
     return;
   }

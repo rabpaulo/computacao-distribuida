@@ -81,6 +81,8 @@ Pipeline no GitHub Actions, Prometheus + Grafana (http://localhost:3100) e teste
 
 Teste de carga progressivo na nuvem (ponto de ruptura): [manual](docs/TESTE-DE-CARGA.md) e [relatório](docs/RELATORIO-TESTE-DE-CARGA.md).
 
+Notificações em tempo real (RabbitMQ + Server-Sent Events) e adequação à LGPD (consentimento, exportação e exclusão de dados): [docs/NOTIFICACOES-E-LGPD.md](docs/NOTIFICACOES-E-LGPD.md).
+
 ### Semanas 5-6: Resiliência, PayPal e IoT
 
 ```

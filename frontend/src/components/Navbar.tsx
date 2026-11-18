@@ -1,7 +1,8 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { ShoppingCart, User as UserIcon, LogOut, Plus, Search, Shield, Package } from 'lucide-react';
+import { ShoppingCart, User as UserIcon, LogOut, Plus, Search, Shield, Package, ShieldCheck } from 'lucide-react';
+import { NotificationBell } from './NotificationBell';
 
 interface NavbarProps {
   searchTerm: string;
@@ -9,6 +10,7 @@ interface NavbarProps {
   onOpenAuth: () => void;
   onOpenCreateProduct: () => void;
   onOpenOrders: () => void;
+  onOpenPrivacy: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -17,6 +19,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAuth,
   onOpenCreateProduct,
   onOpenOrders,
+  onOpenPrivacy,
 }) => {
   const { user, isAdmin, logout } = useAuth();
   const { totalCount, setIsCartOpen } = useCart();
@@ -75,6 +78,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
+          {/* Notificações em tempo real (sino) */}
+          {user && <NotificationBell onOpenOrders={onOpenOrders} />}
+
           {/* Botão do Carrinho */}
           <button
             className="btn-cart"
@@ -102,6 +108,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span className="role-tag client">Cliente</span>
                 )}
               </div>
+              <button
+                className="btn-logout"
+                onClick={onOpenPrivacy}
+                title="Privacidade e meus dados"
+                aria-label="Privacidade e meus dados"
+              >
+                <ShieldCheck size={16} />
+              </button>
               <button className="btn-logout" onClick={logout} title="Sair da conta">
                 <LogOut size={16} />
               </button>

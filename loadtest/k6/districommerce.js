@@ -56,7 +56,8 @@ const authHeaders = (token) => ({
 function register(name, email, role) {
   const res = http.post(
     `${BASE_URL}/api/v1/auth/register`,
-    JSON.stringify({ name, email, password: 'senha-k6-123', role }),
+    // acceptTerms: o cadastro exige o aceite da Política de Privacidade (LGPD)
+    JSON.stringify({ name, email, password: 'senha-k6-123', role, acceptTerms: true }),
     json
   );
   if (res.status !== 201 && res.status !== 200) {

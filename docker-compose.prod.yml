@@ -19,6 +19,9 @@ services:
   logistics-service:
     image: ghcr.io/${IMAGE_OWNER:-rabpaulo}/districommerce-logistics-service:${IMAGE_TAG:-latest}
 
+  notifications-service:
+    image: ghcr.io/${IMAGE_OWNER:-rabpaulo}/districommerce-notifications-service:${IMAGE_TAG:-latest}
+
   paypal-mock:
     image: ghcr.io/${IMAGE_OWNER:-rabpaulo}/districommerce-paypal-mock:${IMAGE_TAG:-latest}
 

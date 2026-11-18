@@ -6,6 +6,9 @@ export interface User {
   email: string;
   role: UserRole;
   created_at?: string;
+  // LGPD: quando e qual versão da Política de Privacidade o titular aceitou
+  consent_at?: string | null;
+  consent_version?: string | null;
 }
 
 export interface Product {
@@ -97,4 +100,18 @@ export interface Shipment {
   eta_seconds: number | null;
   last_telemetry_at: string | null;
   delivered_at: string | null;
+}
+
+export type NotificationLevel = 'info' | 'success' | 'error';
+
+// Chamada AppNotification para não confundir com a Notification do navegador
+export interface AppNotification {
+  id: string;
+  type: string;
+  level: NotificationLevel;
+  title: string;
+  message: string;
+  order_id: string | null;
+  read_at: string | null;
+  created_at: string;
 }

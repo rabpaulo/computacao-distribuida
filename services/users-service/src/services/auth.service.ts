@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../config/database';
 import { env } from '../config/env';
-import { SafeUser, toSafeUser, User, UserRole } from '../models/user';
+import { SafeUser, toSafeUser, USER_COLUMNS, User, UserRole } from '../models/user';
 import { AppError } from '../middlewares/error.middleware';
 
 export interface RegisterDTO {
@@ -11,6 +11,8 @@ export interface RegisterDTO {
   email: string;
   password: string;
   role?: UserRole;
+  // LGPD: o titular precisa aceitar a Política de Privacidade para criar a conta
+  acceptTerms: boolean;
 }
 
 export interface LoginDTO {
@@ -25,6 +27,12 @@ export interface AuthResult {
 
 export class AuthService {
   async register(data: RegisterDTO): Promise<AuthResult> {
+    // O controller já valida; aqui é a garantia de que nenhum outro caminho
+    // cria conta sem consentimento registrado
+    if (data.acceptTerms !== true) {
+      throw new AppError(400, 'É necessário aceitar a Política de Privacidade para se cadastrar');
+    }
+
     const normalizedEmail = data.email.toLowerCase().trim();
 
     // Verifica se e-mail já existe
@@ -40,10 +48,11 @@ export class AuthService {
     const userId = uuidv4();
     const role: UserRole = data.role === 'ROLE_ADMIN' ? 'ROLE_ADMIN' : 'ROLE_CUSTOMER';
 
+    // consent_at/consent_version: prova de quando e qual versão da política o titular aceitou
     const insertQuery = `
-      INSERT INTO users (id, name, email, password_hash, role)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, name, email, password_hash, role, created_at, updated_at
+      INSERT INTO users (id, name, email, password_hash, role, consent_at, consent_version)
+      VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, $6)
+      RETURNING ${USER_COLUMNS}
     `;
 
     const result = await pool.query<User>(insertQuery, [
@@ -52,6 +61,7 @@ export class AuthService {
       normalizedEmail,
       passwordHash,
       role,
+      env.PRIVACY_POLICY_VERSION,
     ]);
 
     const createdUser = result.rows[0];
@@ -65,7 +75,7 @@ export class AuthService {
     const normalizedEmail = data.email.toLowerCase().trim();
 
     const query = `
-      SELECT id, name, email, password_hash, role, created_at, updated_at
+      SELECT ${USER_COLUMNS}
       FROM users
       WHERE email = $1
     `;

@@ -6,15 +6,19 @@ import { UserRole } from '../types';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  // Abre a Política de Privacidade (o texto que o titular está aceitando)
+  onOpenPolicy: () => void;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onOpenPolicy }) => {
   const { login, register } = useAuth();
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('ROLE_CUSTOMER');
+  // LGPD: consentimento explícito. Começa desmarcado, o titular precisa marcar.
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,8 +33,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       if (isLoginMode) {
         await login(email, password);
       } else {
-        await register(name, email, password, role);
+        await register(name, email, password, role, acceptTerms);
       }
+      setAcceptTerms(false);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Erro ao autenticar');
@@ -155,7 +160,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             </div>
           )}
 
-          <button type="submit" className="btn-submit" disabled={isLoading}>
+          {!isLoginMode && (
+            <label className="consent-check">
+              <input
+                type="checkbox"
+                checked={acceptTerms}
+                onChange={(e) => setAcceptTerms(e.target.checked)}
+                required
+              />
+              <span>
+                Li e aceito a{' '}
+                <button type="button" className="consent-link" onClick={onOpenPolicy}>
+                  Política de Privacidade
+                </button>
+                .
+              </span>
+            </label>
+          )}
+
+          <button
+            type="submit"
+            className="btn-submit"
+            disabled={isLoading || (!isLoginMode && !acceptTerms)}
+          >
             {isLoading ? (
               <>
                 <Loader2 size={16} className="spin-animation" /> Processando...

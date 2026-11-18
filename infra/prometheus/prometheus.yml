@@ -18,6 +18,8 @@ scrape_configs:
         labels: { app: payments-service }
       - targets: ['logistics-service:3005']
         labels: { app: logistics-service }
+      - targets: ['notifications-service:3007']
+        labels: { app: notifications-service }
 
   - job_name: prometheus
     static_configs:

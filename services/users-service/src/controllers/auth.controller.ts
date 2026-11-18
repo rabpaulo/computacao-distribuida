@@ -8,6 +8,11 @@ export const registerSchema = z.object({
     email: z.string().email('E-mail em formato inválido'),
     password: z.string().min(6, 'A senha deve conter pelo menos 6 caracteres'),
     role: z.enum(['ROLE_CUSTOMER', 'ROLE_ADMIN']).optional().default('ROLE_CUSTOMER'),
+    // LGPD: consentimento explícito. Só vale se vier exatamente true
+    // (nada de string "true" nem campo ausente).
+    acceptTerms: z.literal(true, {
+      errorMap: () => ({ message: 'É necessário aceitar a Política de Privacidade' }),
+    }),
   }),
 });
 

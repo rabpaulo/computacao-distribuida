@@ -3,6 +3,8 @@ import { pool } from '../config/database';
 import { env } from '../config/env';
 import { AppError } from '../middlewares/error.middleware';
 import { OrderConfirmedEvent } from '../messaging/events';
+import { broker } from '../messaging';
+import { ROUTING_KEYS } from '../messaging/config';
 import { FleetGateway } from '../iot/fleet.gateway';
 import {
   GeoPoint,
@@ -107,7 +109,30 @@ export class ShipmentService {
     const assigned = this.mapRow(res.rows[0]);
     await this.addEvent(assigned.id, 'ASSIGNED', `Despachada para o caminhão ${truckId}`);
     await this.sendDispatch(assigned);
+    void this.publishStatus(ROUTING_KEYS.SHIPMENT_ASSIGNED, assigned);
     return assigned;
+  }
+
+  // Avisa o resto do sistema (hoje, o notifications-service) que a entrega mudou
+  // de status. É secundário: se o broker estiver fora, a entrega segue normal e
+  // o cliente só deixa de receber o aviso daquele passo.
+  private async publishStatus(
+    routingKey: string,
+    shipment: { id: string; order_id: string; user_id: string; truck_id: string | null }
+  ): Promise<void> {
+    try {
+      await broker.publish(routingKey, {
+        eventId: randomUUID(),
+        eventType: routingKey,
+        occurredAt: new Date().toISOString(),
+        shipmentId: shipment.id,
+        orderId: shipment.order_id,
+        userId: shipment.user_id,
+        truckId: shipment.truck_id,
+      });
+    } catch (err) {
+      console.warn(`[logistics-service] Não foi possível publicar ${routingKey}: ${(err as Error).message}`);
+    }
   }
 
   private async sendDispatch(shipment: Shipment): Promise<void> {
@@ -198,11 +223,14 @@ export class ShipmentService {
       const res = await pool.query(
         `UPDATE shipments SET status = 'IN_TRANSIT', current_lat = $1, current_lng = $2,
            updated_at = CURRENT_TIMESTAMP
-         WHERE id = $3 AND status = 'ASSIGNED'`,
+         WHERE id = $3 AND status = 'ASSIGNED'
+         RETURNING id, order_id, user_id, truck_id`,
         [msg.position.lat, msg.position.lng, msg.shipmentId]
       );
       if (res.rowCount) {
         await this.addEvent(msg.shipmentId, 'PICKED_UP', `Coletada no CD pelo caminhão ${msg.truckId}`, msg.position);
+        const updated = res.rows?.[0];
+        if (updated) void this.publishStatus(ROUTING_KEYS.SHIPMENT_IN_TRANSIT, updated);
       }
       return;
     }
@@ -211,13 +239,16 @@ export class ShipmentService {
       const res = await pool.query(
         `UPDATE shipments SET status = 'DELIVERED', progress = 1, eta_seconds = 0,
            current_lat = $1, current_lng = $2, delivered_at = $3, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $4 AND status <> 'DELIVERED'`,
+         WHERE id = $4 AND status <> 'DELIVERED'
+         RETURNING id, order_id, user_id, truck_id`,
         [msg.position.lat, msg.position.lng, msg.ts, msg.shipmentId]
       );
       if (res.rowCount) {
         this.lastTempAlert.delete(msg.shipmentId);
         await this.addEvent(msg.shipmentId, 'DELIVERED', `Entregue pelo caminhão ${msg.truckId}`, msg.position);
         console.log(`[logistics-service] Entrega ${msg.shipmentId} concluída`);
+        const updated = res.rows?.[0];
+        if (updated) void this.publishStatus(ROUTING_KEYS.SHIPMENT_DELIVERED, updated);
       }
     }
   }

@@ -5,6 +5,10 @@ metadata:
   namespace: districommerce
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Notificações em tempo real (Server-Sent Events): sem buffer e com timeout longo
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 spec:
   ingressClassName: nginx
   rules:

@@ -56,6 +56,7 @@ jobs:
           - { name: orders-service, context: services/orders-service }
           - { name: payments-service, context: services/payments-service }
           - { name: logistics-service, context: services/logistics-service }
+          - { name: notifications-service, context: services/notifications-service }
           - { name: paypal-mock, context: services/paypal-mock }
           - { name: iot-simulator, context: services/iot-simulator }
           - { name: frontend, context: frontend }
@@ -147,6 +148,8 @@ jobs:
           ssh vm 'mkdir -p ~/computacao-distribuida'
           scp -r docker-compose.yml docker-compose.prod.yml infra loadtest vm:~/computacao-distribuida/
 
+      # Caddy e Prometheus leem arquivos de configuração montados do disco: container que não
+      # foi recriado não relê sozinho, então recarregamos (Caddy sem derrubar conexões).
       - name: Baixar as imagens do commit e subir os containers
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -159,6 +162,8 @@ jobs:
             && export IMAGE_OWNER='$IMAGE_OWNER' IMAGE_TAG='$IMAGE_TAG' COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml \
             && docker compose pull \
             && docker compose up -d --no-build --remove-orphans \
+            && (docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile || true) \
+            && docker compose restart prometheus \
             && docker image prune -f"
 
       - name: Teste de fumaça no site publicado

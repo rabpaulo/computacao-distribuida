@@ -1,5 +1,5 @@
 import { pool } from '../config/database';
-import { SafeUser, toSafeUser, User } from '../models/user';
+import { SafeUser, toSafeUser, USER_COLUMNS, User } from '../models/user';
 import { AppError } from '../middlewares/error.middleware';
 
 export interface UpdateProfileDTO {
@@ -9,7 +9,7 @@ export interface UpdateProfileDTO {
 export class UserService {
   async getById(id: string): Promise<SafeUser> {
     const query = `
-      SELECT id, name, email, password_hash, role, created_at, updated_at
+      SELECT ${USER_COLUMNS}
       FROM users
       WHERE id = $1
     `;
@@ -17,6 +17,12 @@ export class UserService {
 
     if (result.rows.length === 0) {
       throw new AppError(404, 'Usuário não encontrado');
+    }
+
+    // Token emitido antes da exclusão ainda é válido até expirar. Aqui ele deixa
+    // de servir para ler o perfil, e o frontend encerra a sessão ao receber o erro.
+    if (result.rows[0].anonymized_at) {
+      throw new AppError(410, 'Esta conta foi removida');
     }
 
     return toSafeUser(result.rows[0]);
@@ -30,8 +36,8 @@ export class UserService {
     const query = `
       UPDATE users
       SET name = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-      RETURNING id, name, email, password_hash, role, created_at, updated_at
+      WHERE id = $2 AND anonymized_at IS NULL
+      RETURNING ${USER_COLUMNS}
     `;
 
     const result = await pool.query<User>(query, [data.name.trim(), id]);
@@ -44,12 +50,16 @@ export class UserService {
   }
 
   async listAll(limit = 50, offset = 0): Promise<{ users: SafeUser[]; total: number }> {
-    const countResult = await pool.query('SELECT COUNT(*) as total FROM users');
+    // Contas anonimizadas (exclusão LGPD) não aparecem: não há mais pessoa ali
+    const countResult = await pool.query(
+      'SELECT COUNT(*) as total FROM users WHERE anonymized_at IS NULL'
+    );
     const total = parseInt(countResult.rows[0].total, 10);
 
     const query = `
-      SELECT id, name, email, password_hash, role, created_at, updated_at
+      SELECT ${USER_COLUMNS}
       FROM users
+      WHERE anonymized_at IS NULL
       ORDER BY created_at DESC
       LIMIT $1 OFFSET $2
     `;

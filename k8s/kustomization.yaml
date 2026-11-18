@@ -18,6 +18,7 @@ resources:
   - services/payments-service.yaml
   - services/paypal-mock.yaml
   - services/logistics-service.yaml
+  - services/notifications-service.yaml
   - services/api-gateway.yaml
   - services/frontend.yaml
   - ingress.yaml

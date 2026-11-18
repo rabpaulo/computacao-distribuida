@@ -1,6 +1,7 @@
 import { createApp } from './app';
 import { env } from './config/env';
 import { initDatabase, pool } from './config/database';
+import { publisher } from './messaging/publisher';
 
 async function bootstrap() {
   try {
@@ -8,6 +9,10 @@ async function bootstrap() {
 
     // Inicializa tabela no PostgreSQL se necessário
     await initDatabase();
+
+    // RabbitMQ conecta em background e reconecta sozinho. Só é usado na exclusão
+    // de conta (user.deleted): login e cadastro funcionam mesmo com o broker fora.
+    void publisher.connect();
 
     const app = createApp();
 
@@ -22,6 +27,7 @@ async function bootstrap() {
       server.close(async () => {
         console.log('[users-service] Servidor HTTP fechado.');
         try {
+          await publisher.close();
           await pool.end();
           console.log('[users-service] Pool PostgreSQL desconectado com sucesso.');
           process.exit(0);

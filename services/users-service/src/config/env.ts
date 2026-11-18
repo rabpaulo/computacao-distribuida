@@ -13,7 +13,14 @@ const envSchema = z.object({
   DB_NAME: z.string().default('districommerce_users'),
   DATABASE_URL: z.string().optional(),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET deve ter ao menos 16 caracteres').default('districommerce-users-secret-jwt-key-minimum-length'),
-  JWT_EXPIRES_IN: z.string().default('24h')
+  JWT_EXPIRES_IN: z.string().default('24h'),
+
+  // RabbitMQ: o users-service só PUBLICA (user.deleted, na exclusão de conta)
+  RABBITMQ_URL: z.string().default('amqp://admin:admin@localhost:5672'),
+
+  // LGPD: versão da Política de Privacidade que o titular aceitou no cadastro.
+  // Subiu a versão, dá para saber quem aceitou a anterior.
+  PRIVACY_POLICY_VERSION: z.string().default('1.0'),
 });
 
 export const env = envSchema.parse(process.env);

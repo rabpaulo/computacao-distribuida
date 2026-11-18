@@ -4,6 +4,7 @@ import { Order, Payment, Shipment } from '../types';
 import { X, Package, Calendar, Loader2, CheckCircle2, Clock, XCircle, Wallet } from 'lucide-react';
 import { PayPalCheckoutModal } from './PayPalCheckoutModal';
 import { ShipmentTracker } from './ShipmentTracker';
+import { useNotifications } from '../context/NotificationContext';
 
 interface OrdersModalProps {
   isOpen: boolean;
@@ -52,6 +53,13 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({ isOpen, onClose }) => 
   const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Chegou uma notificação em tempo real (pagamento, entrega...): recarrega na hora,
+  // sem esperar o próximo ciclo de polling.
+  const { lastEventAt } = useNotifications();
+  useEffect(() => {
+    if (isOpen && lastEventAt > 0) setReloadKey((key) => key + 1);
+  }, [lastEventAt]);
 
   useEffect(() => {
     if (!isOpen) return;

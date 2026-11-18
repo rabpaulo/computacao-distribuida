@@ -93,6 +93,9 @@ services:
       DB_NAME: districommerce_users
       JWT_SECRET: districommerce-users-secret-jwt-key-minimum-length
       JWT_EXPIRES_IN: 24h
+      # LGPD: publica user.deleted quando o titular exclui a conta
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672
+      PRIVACY_POLICY_VERSION: "1.0"
     depends_on:
       postgres:
         condition: service_healthy
@@ -313,6 +316,41 @@ services:
       - districommerce-network
 
   # ============================================================================
+  # 7.5 Microsserviço de Notificações (RabbitMQ -> Server-Sent Events)
+  #     Consome eventos de pedido, pagamento, entrega e exclusão de conta e avisa
+  #     o cliente em tempo real. Mantém 1 réplica: as conexões SSE ficam na memória.
+  # ============================================================================
+  notifications-service:
+    build:
+      context: ./services/notifications-service
+      dockerfile: Dockerfile
+    container_name: districommerce-notifications-service
+    restart: unless-stopped
+    ports:
+      - "3007:3007"
+    environment:
+      PORT: 3007
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgrespassword
+      DB_NAME: districommerce_users
+      JWT_SECRET: districommerce-users-secret-jwt-key-minimum-length
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672
+      RABBITMQ_PREFETCH: 10
+      RABBITMQ_MAX_RETRIES: 5
+      RABBITMQ_RETRY_DELAY_MS: 5000
+      NOTIFICATIONS_RETENTION_DAYS: 90
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - districommerce-network
+
+  # ============================================================================
   # 8. API Gateway (TypeScript / Express Proxy - Ponto Central de Entrada)
   # ============================================================================
   api-gateway:
@@ -331,6 +369,7 @@ services:
       ORDERS_SERVICE_URL: http://orders-service:3003
       PAYMENTS_SERVICE_URL: http://payments-service:3004
       LOGISTICS_SERVICE_URL: http://logistics-service:3005
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:3007
       CLIENT_ORIGIN: "*"
     depends_on:
       - users-service
@@ -338,6 +377,7 @@ services:
       - orders-service
       - payments-service
       - logistics-service
+      - notifications-service
     networks:
       - districommerce-network
 

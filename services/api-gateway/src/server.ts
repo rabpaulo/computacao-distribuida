@@ -44,6 +44,7 @@ app.get('/services', async (_req, res) => {
     checkService('orders-service', env.ORDERS_SERVICE_URL),
     checkService('payments-service', env.PAYMENTS_SERVICE_URL),
     checkService('logistics-service', env.LOGISTICS_SERVICE_URL),
+    checkService('notifications-service', env.NOTIFICATIONS_SERVICE_URL),
   ]);
 
   const allOnline = results.every((s) => s.status === 'ONLINE');
@@ -110,6 +111,17 @@ app.use(
   })
 );
 
+// 6. Notificações em tempo real (SSE) -> notifications-service (3007)
+// O proxy repassa a resposta em streaming, então o Server-Sent Events passa direto.
+app.use(
+  createProxyMiddleware({
+    target: env.NOTIFICATIONS_SERVICE_URL,
+    changeOrigin: true,
+    pathFilter: '/api/v1/notifications',
+    logger: console,
+  })
+);
+
 // Middleware para parsing de rotas próprias do gateway
 app.use(express.json());
 
@@ -128,6 +140,7 @@ const server = app.listen(env.PORT, () => {
   console.log(`[api-gateway] Proxy: Orders -> ${env.ORDERS_SERVICE_URL}`);
   console.log(`[api-gateway] Proxy: Payments -> ${env.PAYMENTS_SERVICE_URL}`);
   console.log(`[api-gateway] Proxy: Logistics -> ${env.LOGISTICS_SERVICE_URL}`);
+  console.log(`[api-gateway] Proxy: Notifications -> ${env.NOTIFICATIONS_SERVICE_URL}`);
 });
 
 process.on('SIGTERM', () => {

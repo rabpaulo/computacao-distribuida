@@ -40,6 +40,8 @@ spec:
               value: "http://payments-service:3004"
             - name: LOGISTICS_SERVICE_URL
               value: "http://logistics-service:3005"
+            - name: NOTIFICATIONS_SERVICE_URL
+              value: "http://notifications-service:3007"
             - name: CLIENT_ORIGIN
               value: "*"
           resources:

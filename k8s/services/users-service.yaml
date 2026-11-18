@@ -68,6 +68,17 @@ spec:
                 configMapKeyRef:
                   name: districommerce-config
                   key: JWT_EXPIRES_IN
+            # LGPD: publica user.deleted quando o titular exclui a conta
+            - name: RABBITMQ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: RABBITMQ_URL
+            - name: PRIVACY_POLICY_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: PRIVACY_POLICY_VERSION
           resources:
             requests:
               cpu: 50m
