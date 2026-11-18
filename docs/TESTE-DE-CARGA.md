@@ -102,7 +102,7 @@ Para ver ao vivo em vez de gravar: `docker stats --format "table {{.Name}}\t{{.C
 
 ### 3.4 Acompanhar no Grafana (opcional)
 
-No PowerShell do seu computador (substitua os valores entre `<>`), deixe o túnel aberto e acesse http://localhost:3100:
+No PowerShell do seu computador (substitua os valores entre `<>`), deixe o túnel aberto e acesse http://localhost:3100/tools/grafana/ (ou, logado como admin no site, use a aba **Monitoramento**, que dispensa o túnel):
 
 ```powershell
 ssh -i <caminho-da-chave> -L 3100:localhost:3100 <usuario>@<IP-da-VM>

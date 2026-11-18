@@ -42,7 +42,7 @@ A plataforma adota uma arquitetura de microsserviços desacoplada, orientada a c
                       (AMQP  / assincrono)                     v         |
                                               +------------------------------+
                                               |   RabbitMQ (Porta 5672)      |
-                                              |   Painel: localhost:15672    |
+                                              |   Painel: /tools/rabbitmq/   |
                                               |                              |
                                               | districommerce.events (topic)|
                                               |  |- payments.order-created   |
@@ -77,13 +77,15 @@ A plataforma adota uma arquitetura de microsserviços desacoplada, orientada a c
 
 ### Semana 7: CI/CD, Monitoramento e Testes de Carga
 
-Pipeline no GitHub Actions, Prometheus + Grafana (http://localhost:3100) e testes de carga com k6. Detalhes e comandos em [`docs/SEMANA-7.md`](docs/SEMANA-7.md).
+Pipeline no GitHub Actions, Prometheus + Grafana (http://localhost:3000/tools/grafana/, ou a aba **Monitoramento** logado como admin) e testes de carga com k6. Detalhes e comandos em [`docs/SEMANA-7.md`](docs/SEMANA-7.md).
 
 Teste de carga progressivo na nuvem (ponto de ruptura): [manual](docs/TESTE-DE-CARGA.md) e [relatório](docs/RELATORIO-TESTE-DE-CARGA.md).
 
 Notificações em tempo real (RabbitMQ + Server-Sent Events) e adequação à LGPD (consentimento, exportação e exclusão de dados): [docs/NOTIFICACOES-E-LGPD.md](docs/NOTIFICACOES-E-LGPD.md).
 
 Migrations versionadas do PostgreSQL com Flyway: [docs/FLYWAY.md](docs/FLYWAY.md).
+
+Aba **Monitoramento** (só admin): Grafana, Prometheus e RabbitMQ dentro do site: [docs/MONITORAMENTO-ADMIN.md](docs/MONITORAMENTO-ADMIN.md).
 
 ### Semanas 5-6: Resiliência, PayPal e IoT
 
@@ -223,7 +225,7 @@ docker compose logs -f
 # http://localhost:3000
 
 # 4. Painel de administração do RabbitMQ (usuário admin / senha admin):
-# http://localhost:15672
+# http://localhost:3000/tools/rabbitmq/
 ```
 
 ---
@@ -368,7 +370,7 @@ continua em `PAYMENT_MAX_AMOUNT` (padrão `50000`) no `payments-service`.
 docker compose up --build -d
 
 # 2. Abrir o painel do RabbitMQ (admin / admin):
-#    http://localhost:15672  -> aba "Queues"
+#    http://localhost:3000/tools/rabbitmq/  -> aba "Queues"
 
 # 3. Acompanhar os dois lados da fila:
 docker compose logs -f orders-service payments-service

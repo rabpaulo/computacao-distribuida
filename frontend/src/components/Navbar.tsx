@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { ShoppingCart, User as UserIcon, LogOut, Plus, Search, Shield, Package, ShieldCheck } from 'lucide-react';
+import { ShoppingCart, User as UserIcon, LogOut, Plus, Search, Shield, Package, ShieldCheck, Activity } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 
 interface NavbarProps {
@@ -11,6 +11,7 @@ interface NavbarProps {
   onOpenCreateProduct: () => void;
   onOpenOrders: () => void;
   onOpenPrivacy: () => void;
+  onOpenMonitoring: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -20,6 +21,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenCreateProduct,
   onOpenOrders,
   onOpenPrivacy,
+  onOpenMonitoring,
 }) => {
   const { user, isAdmin, logout } = useAuth();
   const { totalCount, setIsCartOpen } = useCart();
@@ -67,6 +69,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button className="btn-admin-action" onClick={onOpenCreateProduct}>
               <Plus size={15} />
               <span>Novo Produto</span>
+            </button>
+          )}
+
+          {/* Monitoramento (Grafana, Prometheus, RabbitMQ): só para admin */}
+          {isAdmin && (
+            <button className="btn-admin-action" onClick={onOpenMonitoring}>
+              <Activity size={15} />
+              <span>Monitoramento</span>
             </button>
           )}
 

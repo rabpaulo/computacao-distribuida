@@ -23,7 +23,7 @@ docker compose ps        # 13 contêineres "running"
 | O quê | Onde |
 |---|---|
 | Loja | http://localhost:3000 |
-| RabbitMQ (admin / admin) | http://localhost:15672 |
+| RabbitMQ (admin / admin) | http://localhost:3000/tools/rabbitmq/ |
 | Circuit breakers do orders-service | http://localhost:3003/circuit-breakers |
 | Circuit breakers do payments-service | http://localhost:3004/circuit-breakers |
 | Estado do simulador PayPal | http://localhost:3006/health |

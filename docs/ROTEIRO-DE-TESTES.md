@@ -39,7 +39,7 @@ Todos devem aparecer como `running`.
 | O quê | Endereço | Login |
 |---|---|---|
 | Loja | http://localhost:3000 | `admin@admin.com` / `admin123` |
-| Painel do RabbitMQ | http://localhost:15672 | `admin` / `admin` |
+| Painel do RabbitMQ | http://localhost:3000/tools/rabbitmq/ | `admin` / `admin` |
 
 > Se o login não existir, cadastre pelo site. Qualquer e-mail fictício serve,
 > não há validação. A senha precisa ter 6 caracteres ou mais. Marque

@@ -12,6 +12,7 @@ import { OrdersModal } from './components/OrdersModal';
 import { ToastStack } from './components/ToastStack';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 import { PrivacyCenterModal } from './components/PrivacyCenterModal';
+import { MonitoringModal } from './components/MonitoringModal';
 import { ShieldCheck, Database, Server, Terminal, Network } from 'lucide-react';
 
 const AppContent: React.FC = () => {
@@ -21,6 +22,7 @@ const AppContent: React.FC = () => {
   const [isOrdersOpen, setIsOrdersOpen] = useState(false);
   const [isPolicyOpen, setIsPolicyOpen] = useState(false);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
+  const [isMonitoringOpen, setIsMonitoringOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleRefreshProducts = () => {
@@ -40,6 +42,7 @@ const AppContent: React.FC = () => {
         onOpenCreateProduct={() => setIsCreateProductOpen(true)}
         onOpenOrders={() => setIsOrdersOpen(true)}
         onOpenPrivacy={() => setIsPrivacyOpen(true)}
+        onOpenMonitoring={() => setIsMonitoringOpen(true)}
       />
 
       <main className="main-content">
@@ -154,6 +157,7 @@ const AppContent: React.FC = () => {
         onProductCreated={handleRefreshProducts}
       />
       <OrdersModal isOpen={isOrdersOpen} onClose={() => setIsOrdersOpen(false)} />
+      <MonitoringModal isOpen={isMonitoringOpen} onClose={() => setIsMonitoringOpen(false)} />
       <PrivacyCenterModal
         isOpen={isPrivacyOpen}
         onClose={() => setIsPrivacyOpen(false)}

@@ -78,7 +78,7 @@ services:
 
   # ============================================================================
   # 3. Broker de Mensageria (RabbitMQ / AMQP 0-9-1 - Comunicação Assíncrona)
-  #    Painel de administração: http://localhost:15672 (admin / admin)
+  #    Painel de administração: http://localhost:15672/tools/rabbitmq/ (admin / admin)
   # ============================================================================
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
@@ -92,6 +92,8 @@ services:
       - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+      # Tela de administração em /tools/rabbitmq/ (aba "Monitoramento" do site)
+      - ./infra/rabbitmq/20-management-prefix.conf:/etc/rabbitmq/conf.d/20-management-prefix.conf:ro
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
       interval: 10s
@@ -409,6 +411,10 @@ services:
       PAYMENTS_SERVICE_URL: http://payments-service:3004
       LOGISTICS_SERVICE_URL: http://logistics-service:3005
       NOTIFICATIONS_SERVICE_URL: http://notifications-service:3007
+      # Telas de monitoramento servidas em /tools/* (aba "Monitoramento" do site)
+      GRAFANA_URL: http://grafana:3000
+      PROMETHEUS_URL: http://prometheus:9090
+      RABBITMQ_MGMT_URL: http://rabbitmq:15672
       CLIENT_ORIGIN: "*"
     depends_on:
       - users-service
@@ -446,6 +452,10 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=7d
+      # A UI gera os links já com /tools/prometheus/, mas atende na raiz: o gateway
+      # remove o prefixo. Assim a coleta, o Grafana e os healthchecks não mudam.
+      - --web.external-url=http://localhost:9090/tools/prometheus/
+      - --web.route-prefix=/
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -462,6 +472,18 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_USERS_ALLOW_SIGN_UP: "false"
+      # Servido em /tools/grafana/ e mostrado dentro do site (iframe). Em produção
+      # a URL pública vem do docker-compose.prod.yml.
+      GF_SERVER_ROOT_URL: http://localhost:3000/tools/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      # Quem chega pela aba de admin entra direto como visualizador, sem login
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      # Abre direto no dashboard do projeto
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/districommerce-overview.json
+      # Sem WebSocket do Grafana Live: o proxy do gateway não repassa upgrade
+      GF_LIVE_MAX_CONNECTIONS: "0"
     volumes:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro

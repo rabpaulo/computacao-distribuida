@@ -34,8 +34,8 @@ docker compose down         # para tudo (adicione -v para apagar os volumes)
 ### Verificação rápida (checklist)
 
 1. `curl http://localhost:8000/metrics` retorna texto com `http_requests_total`.
-2. Prometheus em http://localhost:9090/targets: 6 alvos `districommerce` em **UP**.
-3. Grafana em http://localhost:3100, dashboard *DistriCommerce - Visão Geral*: "Serviços UP" = 6.
+2. Prometheus em http://localhost:3000/tools/prometheus/targets: 6 alvos `districommerce` em **UP**.
+3. Grafana em http://localhost:3000/tools/grafana/, dashboard *DistriCommerce - Visão Geral*: "Serviços UP" = 6.
 4. `PROFILE=smoke docker compose --profile loadtest run --rm k6` termina com todos os thresholds ✓.
 
 No PowerShell, defina a variável antes: `$env:PROFILE="smoke"; docker compose --profile loadtest run --rm k6`.
@@ -86,8 +86,8 @@ Cada serviço HTTP (gateway, users, products, orders, payments, logistics) expõ
 
 | Ferramenta | URL | Login |
 |---|---|---|
-| Prometheus | http://localhost:9090 (veja *Status > Targets*) | |
-| Grafana | http://localhost:3100 | admin / admin (padrão local; troque com `GRAFANA_ADMIN_PASSWORD`) |
+| Prometheus | http://localhost:3000/tools/prometheus/ (veja *Status > Targets*) | |
+| Grafana | http://localhost:3000/tools/grafana/ | Abre direto como visualizador. Login de admin: `admin` / `admin` (troque com `GRAFANA_ADMIN_PASSWORD`) |
 
 Prometheus e Grafana só escutam em `127.0.0.1` (acessíveis apenas na própria máquina).
 
@@ -117,7 +117,7 @@ Thresholds (o teste falha se violados): erro HTTP < 5%, p95 < 800 ms, checkout p
 
 ```bash
 docker compose up --build -d
-# abra o Grafana (http://localhost:3100) no dashboard e deixe visível
+# abra o Grafana (http://localhost:3000/tools/grafana/) no dashboard e deixe visível
 
 PROFILE=smoke docker compose --profile loadtest run --rm k6   # validação rápida
 docker compose --profile loadtest run --rm k6                 # perfil load
@@ -149,7 +149,7 @@ sum(rate(http_requests_total{status_code=~"5.."}[1m])) by (service)             
 | Grafana sem dados | Intervalo de tempo sem tráfego | Gere tráfego (k6) e use *Last 15 minutes* |
 | Dashboard não atualizou após editar o JSON | Provisionamento carregado só na inicialização | `docker compose restart grafana` |
 | k6 falha no `setup()` | Stack não está de pé ou gateway indisponível | `docker compose ps` e confira os logs do `api-gateway` |
-| Porta 3000 ocupada | Frontend usa a 3000; o Grafana usa a 3100 | Não é conflito: acesse o Grafana em `:3100` |
+| Grafana não abre em `:3100` | O Grafana agora é servido no subcaminho `/tools/grafana/` | Use `http://localhost:3000/tools/grafana/` (ou `http://localhost:3100/tools/grafana/`) |
 
 ## Resultados medidos (perfil `load`, 50 VUs, 2m30s)
 

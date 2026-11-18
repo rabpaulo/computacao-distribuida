@@ -5,8 +5,19 @@ import morgan from 'morgan';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { env } from './config/env';
 import { metricsMiddleware, metricsHandler } from './metrics';
+import { createToolsRouter } from './tools';
 
 const app = express();
+
+// Telas de monitoramento (Grafana, Prometheus, RabbitMQ) para a aba de admin do site.
+// ANTES do helmet: o Content-Security-Policy padrão dele quebraria as telas.
+app.use(
+  createToolsRouter({
+    grafana: env.GRAFANA_URL,
+    prometheus: env.PROMETHEUS_URL,
+    rabbitmq: env.RABBITMQ_MGMT_URL,
+  })
+);
 
 // Middlewares de segurança e auditoria
 app.use(helmet({ crossOriginResourcePolicy: false }));

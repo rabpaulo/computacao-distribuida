@@ -146,6 +146,6 @@ Suba tudo (`docker compose up --build -d`) e abra http://localhost:3000.
    curl -N -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/notifications/stream
    ```
 4. **Exportar e excluir:** no menu da conta, "Privacidade". Depois de excluir, tentar entrar com o e-mail antigo falha, e
-   no RabbitMQ (http://localhost:15672) a fila `notifications.events` mostra a mensagem `user.deleted` consumida.
+   no RabbitMQ (http://localhost:3000/tools/rabbitmq/) a fila `notifications.events` mostra a mensagem `user.deleted` consumida.
 5. **Os testes automatizados:** `npm test -w services/notifications-service`, `-w services/users-service`,
    `-w services/logistics-service`.

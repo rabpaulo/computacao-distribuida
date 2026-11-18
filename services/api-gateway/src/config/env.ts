@@ -12,6 +12,11 @@ const envSchema = z.object({
   PAYMENTS_SERVICE_URL: z.string().default('http://localhost:3004'),
   LOGISTICS_SERVICE_URL: z.string().default('http://localhost:3005'),
   NOTIFICATIONS_SERVICE_URL: z.string().default('http://localhost:3007'),
+
+  // Telas de monitoramento servidas em /tools/* (aba "Monitoramento" do site)
+  GRAFANA_URL: z.string().default('http://localhost:3100'),
+  PROMETHEUS_URL: z.string().default('http://localhost:9090'),
+  RABBITMQ_MGMT_URL: z.string().default('http://localhost:15672'),
   CLIENT_ORIGIN: z.string().default('*'),
 });
 

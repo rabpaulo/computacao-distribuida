@@ -34,6 +34,11 @@ services:
   frontend:
     image: ghcr.io/${IMAGE_OWNER:-rabpaulo}/districommerce-frontend:${IMAGE_TAG:-latest}
 
+  # URL pública do Grafana, usada nos links e redirecionamentos dele
+  grafana:
+    environment:
+      GF_SERVER_ROOT_URL: https://districommerce.duckdns.org/tools/grafana/
+
   caddy:
     image: caddy:2
     container_name: districommerce-caddy
