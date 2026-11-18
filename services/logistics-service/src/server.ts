@@ -1,6 +1,6 @@
 import { createApp } from './app';
 import { env } from './config/env';
-import { initDatabase, pool } from './config/database';
+import { waitForSchema, pool } from './config/database';
 import { broker } from './messaging';
 import { registerOrderConfirmedConsumer } from './messaging/order.consumer';
 import { fleet } from './container';
@@ -9,7 +9,7 @@ async function bootstrap() {
   try {
     console.log(`[logistics-service] Inicializando serviço em ambiente: ${env.NODE_ENV}...`);
 
-    await initDatabase();
+    await waitForSchema();
 
     // MQTT e RabbitMQ conectam em background e reconectam sozinhos
     fleet.connect();

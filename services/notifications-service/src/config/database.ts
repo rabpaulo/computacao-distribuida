@@ -16,37 +16,51 @@ export const pool = new Pool(
       }
 );
 
-export async function initDatabase(): Promise<void> {
-  const query = `
-    CREATE TABLE IF NOT EXISTS notifications (
-      id VARCHAR(36) PRIMARY KEY,
-      user_id VARCHAR(36) NOT NULL,
-      -- Id do evento que originou a notificação: reentrega do broker não duplica
-      event_id VARCHAR(36) NOT NULL UNIQUE,
-      type VARCHAR(40) NOT NULL,
-      level VARCHAR(10) NOT NULL DEFAULT 'info',
-      title VARCHAR(150) NOT NULL,
-      message TEXT NOT NULL,
-      order_id VARCHAR(36),
-      read_at TIMESTAMP WITH TIME ZONE,
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-    );
+// O schema do banco é criado e evoluído pelo Flyway (infra/flyway/sql). Este
+// serviço NÃO cria tabelas: só espera as migrations estarem aplicadas.
+//
+// Menor versão do schema de que este serviço depende (V5__notificacoes.sql). Se uma migration
+// futura mudar o que ele usa, é só subir este número: o serviço passa a recusar
+// bancos que ainda não receberam a mudança.
+export const REQUIRED_SCHEMA_VERSION = 5;
 
-    CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);
+// Espera o Flyway terminar. No Docker Compose o serviço já sobe depois dele, mas
+// no Kubernetes (ou rodando sem o compose) os dois podem iniciar juntos.
+export async function waitForSchema(timeoutMs = 90_000, pollMs = 2_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let reason = '';
 
-    -- Os eventos de pagamento não trazem o userId. Guardamos quem é o dono de
-    -- cada pedido (vindo de order.created) para saber a quem avisar.
-    CREATE TABLE IF NOT EXISTS order_owners (
-      order_id VARCHAR(36) PRIMARY KEY,
-      user_id VARCHAR(36) NOT NULL,
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-    );
+  for (;;) {
+    try {
+      // A tabela de histórico do Flyway diz o que já foi aplicado com sucesso
+      const result = await pool.query<{ version: number }>(
+        `SELECT COALESCE(MAX(version::int), 0) AS version
+         FROM flyway_schema_history
+         WHERE success = true AND version IS NOT NULL`
+      );
+      const current = Number(result.rows[0]?.version ?? 0);
 
-    CREATE INDEX IF NOT EXISTS idx_order_owners_user ON order_owners(user_id);
-  `;
+      if (current >= REQUIRED_SCHEMA_VERSION) {
+        console.log(
+          `[notifications-service] Schema na versão ${current} (mínima exigida: ${REQUIRED_SCHEMA_VERSION}).`
+        );
+        return;
+      }
+      reason = `schema na versão ${current}, mínima exigida ${REQUIRED_SCHEMA_VERSION}`;
+    } catch (error) {
+      // Banco ainda sem a tabela flyway_schema_history, ou fora do ar
+      reason = (error as Error).message;
+    }
 
-  await pool.query(query);
-  console.log('[notifications-service] Tabelas "notifications" e "order_owners" inicializadas.');
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Schema do banco não está pronto (${reason}). Aplique as migrations: docker compose run --rm flyway`
+      );
+    }
+
+    console.log(`[notifications-service] Aguardando as migrations do Flyway (${reason})...`);
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
 }
 
 export async function checkDatabaseHealth(): Promise<boolean> {

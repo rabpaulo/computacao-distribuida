@@ -16,50 +16,51 @@ export const pool = new Pool(
       }
 );
 
-export async function initDatabase(): Promise<void> {
-  const query = `
-    CREATE TABLE IF NOT EXISTS shipments (
-      id VARCHAR(36) PRIMARY KEY,
-      order_id VARCHAR(36) NOT NULL,
-      user_id VARCHAR(36) NOT NULL,
-      status VARCHAR(20) NOT NULL,
-      truck_id VARCHAR(40),
-      origin_lat DOUBLE PRECISION NOT NULL,
-      origin_lng DOUBLE PRECISION NOT NULL,
-      dest_lat DOUBLE PRECISION NOT NULL,
-      dest_lng DOUBLE PRECISION NOT NULL,
-      current_lat DOUBLE PRECISION,
-      current_lng DOUBLE PRECISION,
-      progress DOUBLE PRECISION NOT NULL DEFAULT 0,
-      speed_kmh DOUBLE PRECISION,
-      cargo_temp_c DOUBLE PRECISION,
-      eta_seconds INT,
-      last_telemetry_at TIMESTAMP WITH TIME ZONE,
-      delivered_at TIMESTAMP WITH TIME ZONE,
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-    );
+// O schema do banco é criado e evoluído pelo Flyway (infra/flyway/sql). Este
+// serviço NÃO cria tabelas: só espera as migrations estarem aplicadas.
+//
+// Menor versão do schema de que este serviço depende (V4__entregas.sql). Se uma migration
+// futura mudar o que ele usa, é só subir este número: o serviço passa a recusar
+// bancos que ainda não receberam a mudança.
+export const REQUIRED_SCHEMA_VERSION = 4;
 
-    -- Uma entrega por pedido: order.confirmed reentregue nao duplica
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_shipments_order_id ON shipments(order_id);
-    CREATE INDEX IF NOT EXISTS idx_shipments_user_id ON shipments(user_id);
-    CREATE INDEX IF NOT EXISTS idx_shipments_truck_status ON shipments(truck_id, status);
+// Espera o Flyway terminar. No Docker Compose o serviço já sobe depois dele, mas
+// no Kubernetes (ou rodando sem o compose) os dois podem iniciar juntos.
+export async function waitForSchema(timeoutMs = 90_000, pollMs = 2_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let reason = '';
 
-    CREATE TABLE IF NOT EXISTS shipment_events (
-      id BIGSERIAL PRIMARY KEY,
-      shipment_id VARCHAR(36) NOT NULL REFERENCES shipments(id) ON DELETE CASCADE,
-      type VARCHAR(30) NOT NULL,
-      description TEXT NOT NULL,
-      lat DOUBLE PRECISION,
-      lng DOUBLE PRECISION,
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-    );
+  for (;;) {
+    try {
+      // A tabela de histórico do Flyway diz o que já foi aplicado com sucesso
+      const result = await pool.query<{ version: number }>(
+        `SELECT COALESCE(MAX(version::int), 0) AS version
+         FROM flyway_schema_history
+         WHERE success = true AND version IS NOT NULL`
+      );
+      const current = Number(result.rows[0]?.version ?? 0);
 
-    CREATE INDEX IF NOT EXISTS idx_shipment_events_shipment ON shipment_events(shipment_id);
-  `;
+      if (current >= REQUIRED_SCHEMA_VERSION) {
+        console.log(
+          `[logistics-service] Schema na versão ${current} (mínima exigida: ${REQUIRED_SCHEMA_VERSION}).`
+        );
+        return;
+      }
+      reason = `schema na versão ${current}, mínima exigida ${REQUIRED_SCHEMA_VERSION}`;
+    } catch (error) {
+      // Banco ainda sem a tabela flyway_schema_history, ou fora do ar
+      reason = (error as Error).message;
+    }
 
-  await pool.query(query);
-  console.log('[logistics-service] Tabelas "shipments" e "shipment_events" inicializadas.');
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Schema do banco não está pronto (${reason}). Aplique as migrations: docker compose run --rm flyway`
+      );
+    }
+
+    console.log(`[logistics-service] Aguardando as migrations do Flyway (${reason})...`);
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
 }
 
 export async function checkDatabaseHealth(): Promise<boolean> {

@@ -1,0 +1,66 @@
+# ==============================================================================
+# flyway-migrate - Migrations do PostgreSQL (infra/flyway/sql)
+#
+# Job que aplica as migrations pendentes e termina. Os serviços não criam
+# tabelas: no start eles esperam (até 90 s) o schema chegar na versão de que
+# dependem, então a ordem de subida entre este Job e os Deployments não importa.
+#
+# Um Job é imutável. Ao publicar uma versão nova das migrations, apague o
+# anterior antes de aplicar de novo:
+#   kubectl -n districommerce delete job flyway-migrate --ignore-not-found
+#   kubectl apply -k k8s/
+# ==============================================================================
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: flyway-migrate
+  namespace: districommerce
+  labels:
+    app: flyway
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app: flyway
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: flyway
+          image: districommerce/flyway:latest
+          imagePullPolicy: IfNotPresent
+          args: ["migrate"]
+          env:
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_NAME
+            - name: FLYWAY_URL
+              value: "jdbc:postgresql://postgres:5432/$(DB_NAME)"
+            - name: FLYWAY_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: districommerce-config
+                  key: DB_USER
+            - name: FLYWAY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: districommerce-secrets
+                  key: POSTGRES_PASSWORD
+            - name: FLYWAY_CONNECT_RETRIES
+              value: "30"
+            # Banco criado antes do Flyway: baseline na versão 0 (as migrations são idempotentes)
+            - name: FLYWAY_BASELINE_ON_MIGRATE
+              value: "true"
+            - name: FLYWAY_BASELINE_VERSION
+              value: "0"
+            - name: FLYWAY_LOCATIONS
+              value: "filesystem:/flyway/sql"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

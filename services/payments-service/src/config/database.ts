@@ -16,34 +16,51 @@ export const pool = new Pool(
       }
 );
 
-export async function initDatabase(): Promise<void> {
-  const query = `
-    CREATE TABLE IF NOT EXISTS payments (
-      id VARCHAR(36) PRIMARY KEY,
-      order_id VARCHAR(36) NOT NULL,
-      user_id VARCHAR(36) NOT NULL,
-      amount NUMERIC(10, 2) NOT NULL,
-      status VARCHAR(20) NOT NULL,
-      reason TEXT,
-      attempts INT NOT NULL DEFAULT 1,
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-    );
+// O schema do banco é criado e evoluído pelo Flyway (infra/flyway/sql). Este
+// serviço NÃO cria tabelas: só espera as migrations estarem aplicadas.
+//
+// Menor versão do schema de que este serviço depende (V3__pagamentos.sql). Se uma migration
+// futura mudar o que ele usa, é só subir este número: o serviço passa a recusar
+// bancos que ainda não receberam a mudança.
+export const REQUIRED_SCHEMA_VERSION = 3;
 
-    -- E o indice unico que impede cobrar o mesmo pedido duas vezes quando
-    -- o broker reentrega a mensagem
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_order_id ON payments(order_id);
-    CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
+// Espera o Flyway terminar. No Docker Compose o serviço já sobe depois dele, mas
+// no Kubernetes (ou rodando sem o compose) os dois podem iniciar juntos.
+export async function waitForSchema(timeoutMs = 90_000, pollMs = 2_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let reason = '';
 
-    -- Colunas do fluxo PayPal (semanas 5-6). ADD COLUMN IF NOT EXISTS
-    -- deixa o boot funcionar tambem em bancos criados na entrega anterior.
-    ALTER TABLE payments ADD COLUMN IF NOT EXISTS method VARCHAR(20) NOT NULL DEFAULT 'PAYPAL';
-    ALTER TABLE payments ADD COLUMN IF NOT EXISTS paypal_order_id VARCHAR(40);
-    ALTER TABLE payments ADD COLUMN IF NOT EXISTS paypal_capture_id VARCHAR(40);
-  `;
+  for (;;) {
+    try {
+      // A tabela de histórico do Flyway diz o que já foi aplicado com sucesso
+      const result = await pool.query<{ version: number }>(
+        `SELECT COALESCE(MAX(version::int), 0) AS version
+         FROM flyway_schema_history
+         WHERE success = true AND version IS NOT NULL`
+      );
+      const current = Number(result.rows[0]?.version ?? 0);
 
-  await pool.query(query);
-  console.log('[payments-service] Tabela "payments" inicializada.');
+      if (current >= REQUIRED_SCHEMA_VERSION) {
+        console.log(
+          `[payments-service] Schema na versão ${current} (mínima exigida: ${REQUIRED_SCHEMA_VERSION}).`
+        );
+        return;
+      }
+      reason = `schema na versão ${current}, mínima exigida ${REQUIRED_SCHEMA_VERSION}`;
+    } catch (error) {
+      // Banco ainda sem a tabela flyway_schema_history, ou fora do ar
+      reason = (error as Error).message;
+    }
+
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Schema do banco não está pronto (${reason}). Aplique as migrations: docker compose run --rm flyway`
+      );
+    }
+
+    console.log(`[payments-service] Aguardando as migrations do Flyway (${reason})...`);
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
 }
 
 export async function checkDatabaseHealth(): Promise<boolean> {

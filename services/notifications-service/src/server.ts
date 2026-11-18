@@ -1,6 +1,6 @@
 import { createApp } from './app';
 import { env } from './config/env';
-import { initDatabase, pool } from './config/database';
+import { waitForSchema, pool } from './config/database';
 import { hub, notificationService } from './container';
 import { broker } from './messaging';
 import { registerEventConsumer } from './messaging/consumers';
@@ -11,7 +11,7 @@ async function bootstrap() {
   try {
     console.log(`[notifications-service] Inicializando serviço em ambiente: ${env.NODE_ENV}...`);
 
-    await initDatabase();
+    await waitForSchema();
 
     // O RabbitMQ conecta em background e reconecta sozinho
     void broker

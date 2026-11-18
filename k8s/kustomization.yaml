@@ -9,6 +9,7 @@ resources:
   - secrets/common-secrets.yaml
   - databases/postgres.yaml
   - databases/mongodb.yaml
+  - databases/flyway-job.yaml
   - messaging/rabbitmq.yaml
   - iot/mosquitto.yaml
   - iot/iot-simulator.yaml

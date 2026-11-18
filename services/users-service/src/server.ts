@@ -1,14 +1,14 @@
 import { createApp } from './app';
 import { env } from './config/env';
-import { initDatabase, pool } from './config/database';
+import { waitForSchema, pool } from './config/database';
 import { publisher } from './messaging/publisher';
 
 async function bootstrap() {
   try {
     console.log(`[users-service] Inicializando serviço em ambiente: ${env.NODE_ENV}...`);
 
-    // Inicializa tabela no PostgreSQL se necessário
-    await initDatabase();
+    // O schema vem do Flyway: espera as migrations em vez de criar tabelas aqui
+    await waitForSchema();
 
     // RabbitMQ conecta em background e reconecta sozinho. Só é usado na exclusão
     // de conta (user.deleted): login e cadastro funcionam mesmo com o broker fora.

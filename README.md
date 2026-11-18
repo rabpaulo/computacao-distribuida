@@ -83,6 +83,8 @@ Teste de carga progressivo na nuvem (ponto de ruptura): [manual](docs/TESTE-DE-C
 
 Notificações em tempo real (RabbitMQ + Server-Sent Events) e adequação à LGPD (consentimento, exportação e exclusão de dados): [docs/NOTIFICACOES-E-LGPD.md](docs/NOTIFICACOES-E-LGPD.md).
 
+Migrations versionadas do PostgreSQL com Flyway: [docs/FLYWAY.md](docs/FLYWAY.md).
+
 ### Semanas 5-6: Resiliência, PayPal e IoT
 
 ```
@@ -233,10 +235,14 @@ docker compose logs -f
    npm install
    ```
 
-2. **Inicie os bancos de dados e o broker em segundo plano:**
+2. **Inicie os bancos de dados e o broker em segundo plano e aplique as migrations:**
    ```bash
    docker compose up -d postgres mongodb rabbitmq mosquitto
+   docker compose run --rm flyway
    ```
+   Os serviços não criam tabelas: o schema do PostgreSQL vem do Flyway
+   ([`docs/FLYWAY.md`](docs/FLYWAY.md)). Sem o segundo comando, eles ficam esperando as migrations e
+   desistem depois de 90 s com uma mensagem dizendo o que rodar.
 
 3. **Inicie os serviços do backend em terminais separados (ou use os scripts dedicados):**
    ```bash
@@ -259,6 +265,9 @@ docker compose logs -f
    # Terminal 6 - Logistics Service (Porta 3005) + frota IoT
    npm run logistics:dev
    npm run iot:dev
+
+   # Terminal 7 - Notifications Service (Porta 3007)
+   npm run notifications:dev
    ```
 
 4. **Inicie o Frontend React (Porta 3000):**

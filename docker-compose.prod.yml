@@ -1,6 +1,9 @@
 # Producao (VM): docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
 # As imagens vem do GHCR (publicadas pelo CI). IMAGE_OWNER e IMAGE_TAG sao definidos pelo job de deploy.
 services:
+  flyway:
+    image: ghcr.io/${IMAGE_OWNER:-rabpaulo}/districommerce-flyway:${IMAGE_TAG:-latest}
+
   api-gateway:
     image: ghcr.io/${IMAGE_OWNER:-rabpaulo}/districommerce-api-gateway:${IMAGE_TAG:-latest}
 

@@ -1,6 +1,6 @@
 import { createApp } from './app';
 import { env } from './config/env';
-import { initDatabase, pool } from './config/database';
+import { waitForSchema, pool } from './config/database';
 import { broker } from './messaging';
 import { registerOrderConsumer } from './messaging/order.consumer';
 
@@ -8,7 +8,7 @@ async function bootstrap() {
   try {
     console.log(`[payments-service] Inicializando serviço em ambiente: ${env.NODE_ENV}...`);
 
-    await initDatabase();
+    await waitForSchema();
 
     // Conecta em background, senao o boot fica preso esperando o broker
     void broker

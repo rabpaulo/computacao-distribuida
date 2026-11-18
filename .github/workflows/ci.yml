@@ -60,6 +60,7 @@ jobs:
           - { name: paypal-mock, context: services/paypal-mock }
           - { name: iot-simulator, context: services/iot-simulator }
           - { name: frontend, context: frontend }
+          - { name: flyway, context: infra/flyway }
     env:
       PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:

@@ -25,6 +25,35 @@ services:
       - districommerce-network
 
   # ============================================================================
+  # 1.1 Migrations do banco relacional (Flyway)
+  #     Aplica infra/flyway/sql (V1__, V2__...) uma vez e na ordem e registra o
+  #     que foi aplicado em flyway_schema_history. Termina e sai: os serviços que
+  #     usam o Postgres só sobem depois que ele conclui com sucesso.
+  #     Banco que já existia (criado antes do Flyway): baseline na versão 0 e as
+  #     migrations, que são idempotentes, rodam por cima.
+  # ============================================================================
+  flyway:
+    build:
+      context: ./infra/flyway
+      dockerfile: Dockerfile
+    container_name: districommerce-flyway
+    restart: "no"
+    command: migrate
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/districommerce_users
+      FLYWAY_USER: postgres
+      FLYWAY_PASSWORD: postgrespassword
+      FLYWAY_CONNECT_RETRIES: 30
+      FLYWAY_BASELINE_ON_MIGRATE: "true"
+      FLYWAY_BASELINE_VERSION: "0"
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - districommerce-network
+
+  # ============================================================================
   # 2. Banco de Dados NoSQL (Catálogo de Produtos - Documentos e Flexibilidade)
   # ============================================================================
   mongodb:
@@ -99,6 +128,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
     networks:
       - districommerce-network
 
@@ -157,6 +188,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
     networks:
@@ -201,6 +234,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
       paypal-mock:
@@ -283,6 +318,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
       mosquitto:
@@ -345,6 +382,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
     networks:
