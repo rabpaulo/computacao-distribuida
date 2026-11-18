@@ -123,8 +123,19 @@ jobs:
           VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
         run: |
           install -m 700 -d ~/.ssh
-          # tr -d '\r': a chave colada do Windows vem com CRLF e o ssh recusa ("error in libcrypto")
-          printf '%s\n' "$VM_SSH_KEY" | tr -d '\r' > ~/.ssh/id_deploy
+          # Reconstrói a chave privada: remove CRLF/espaços (colar do Windows costuma
+          # estragar as quebras de linha) e refaz o formato BEGIN/END com linhas de 70 colunas.
+          body=$(printf '%s' "$VM_SSH_KEY" | tr -d '\r' \
+            | sed -e 's/-----BEGIN OPENSSH PRIVATE KEY-----//' -e 's/-----END OPENSSH PRIVATE KEY-----//' \
+            | tr -d ' \n')
+          # Diagnóstico seguro (não imprime a chave)
+          echo "Secret tem BEGIN: $(printf '%s' "$VM_SSH_KEY" | grep -c 'BEGIN OPENSSH PRIVATE KEY') | END: $(printf '%s' "$VM_SSH_KEY" | grep -c 'END OPENSSH PRIVATE KEY') | tamanho do corpo: ${#body} caracteres (esperado ~400)"
+          {
+            echo '-----BEGIN OPENSSH PRIVATE KEY-----'
+            printf '%s' "$body" | fold -w 70
+            echo
+            echo '-----END OPENSSH PRIVATE KEY-----'
+          } > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
           ssh-keygen -y -f ~/.ssh/id_deploy > /dev/null || { echo "::error::VM_SSH_KEY inválida: recrie o secret com a chave privada completa (BEGIN...END)"; exit 1; }
           ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
