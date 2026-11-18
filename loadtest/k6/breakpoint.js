@@ -68,6 +68,13 @@ export function handleSummary(data) {
   let firstBad = null;
   let lastReached = 0;
 
+  // Último degrau que recebeu pedidos: se o teste abortou, ele foi cortado no meio.
+  let finalLevel = 0;
+  for (let i = 1; i <= STEPS; i++) {
+    const r = data.metrics[`http_reqs{level:${i * STEP_VUS}}`];
+    if (r && r.values.count) finalLevel = i * STEP_VUS;
+  }
+
   for (let i = 1; i <= STEPS; i++) {
     const level = i * STEP_VUS;
     const reqs = data.metrics[`http_reqs{level:${level}}`];
@@ -80,12 +87,15 @@ export function handleSummary(data) {
     const p95 = dur ? dur.values['p(95)'] : 0;
     const err = fail ? fail.values.rate : 0;
     const ok = p95 < SLO_P95_MS && err < SLO_ERROR_RATE;
-    if (ok && firstBad === null) lastOk = level;
+    // Degrau cortado pelo aborto: poucos dados, então um "OK" dele não prova nada.
+    const partial = level === finalLevel && finalLevel < MAX_VUS;
+    if (ok && !partial && firstBad === null) lastOk = level;
     if (!ok && firstBad === null) firstBad = level;
 
+    const label = (ok ? 'OK' : 'FORA DO SLO') + (partial ? ' (parcial: teste abortado aqui)' : '');
     lines.push(
       `${String(level).padStart(8)} | ${String(Math.round(count / STEP_SECONDS)).padStart(7)} | ` +
-        `${p95.toFixed(0).padStart(9)} | ${(err * 100).toFixed(1).padStart(6)}% | ${ok ? 'OK' : 'FORA DO SLO'}`
+        `${p95.toFixed(0).padStart(9)} | ${(err * 100).toFixed(1).padStart(6)}% | ${label}`
     );
   }
 

@@ -1,0 +1,17 @@
+=== PONTO DE RUPTURA DO DISTRICOMMERCE ===
+SLO: p95 < 800 ms e erros < 5% | colapso: p95 > 5000 ms ou erros >= 30%
+
+ usuarios | req/s ~ | p95 (ms) |  erros | situacao
+---------+---------+-----------+--------+-------------
+       5 |       8 |       144 |    0.0% | OK
+      10 |      15 |       243 |    0.0% | OK
+      15 |      23 |       220 |    0.0% | OK
+      20 |      30 |       304 |    0.0% | OK
+      25 |      25 |      1357 |    0.0% | FORA DO SLO
+      30 |      38 |      1104 |    0.0% | FORA DO SLO
+      35 |      27 |      6594 |    0.0% | FORA DO SLO
+      40 |       3 |       501 |    0.0% | OK
+
+Maior patamar DENTRO do SLO: 20 usuários virtuais simultâneos
+Primeiro degrau fora do SLO: 25 usuários virtuais
+Último degrau alcançado: 40 usuários virtuais

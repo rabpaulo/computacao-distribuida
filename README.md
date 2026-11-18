@@ -79,6 +79,8 @@ A plataforma adota uma arquitetura de microsserviços desacoplada, orientada a c
 
 Pipeline no GitHub Actions, Prometheus + Grafana (http://localhost:3100) e testes de carga com k6. Detalhes e comandos em [`docs/SEMANA-7.md`](docs/SEMANA-7.md).
 
+Teste de carga progressivo na nuvem (ponto de ruptura): [manual](docs/TESTE-DE-CARGA.md) e [relatório](docs/RELATORIO-TESTE-DE-CARGA.md).
+
 ### Semanas 5-6: Resiliência, PayPal e IoT
 
 ```
