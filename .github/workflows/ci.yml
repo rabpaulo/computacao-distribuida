@@ -123,8 +123,10 @@ jobs:
           VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/id_deploy
+          # tr -d '\r': a chave colada do Windows vem com CRLF e o ssh recusa ("error in libcrypto")
+          printf '%s\n' "$VM_SSH_KEY" | tr -d '\r' > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
+          ssh-keygen -y -f ~/.ssh/id_deploy > /dev/null || { echo "::error::VM_SSH_KEY inválida: recrie o secret com a chave privada completa (BEGIN...END)"; exit 1; }
           ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
           printf 'Host vm\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/id_deploy\n  ServerAliveInterval 30\n' "$VM_HOST" "$VM_USER" > ~/.ssh/config
           chmod 600 ~/.ssh/config
