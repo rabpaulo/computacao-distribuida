@@ -8,7 +8,9 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Só cancela execuções antigas em PRs; na main elas entram em fila para não
+  # interromper um deploy no meio.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # ---------------------------------------------------------------
@@ -93,3 +95,72 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.service.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}
+
+  # ---------------------------------------------------------------
+  # CD: publica na VM (só em push na main, depois das imagens no GHCR)
+  # Secrets necessários: VM_HOST, VM_USER, VM_SSH_KEY
+  # ---------------------------------------------------------------
+  deploy:
+    name: Deploy na VM
+    needs: docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    concurrency:
+      group: deploy-producao
+      cancel-in-progress: false
+    env:
+      VM_HOST: ${{ secrets.VM_HOST }}
+      VM_USER: ${{ secrets.VM_USER }}
+      SITE_URL: https://districommerce.duckdns.org
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar SSH
+        env:
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+          printf 'Host vm\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/id_deploy\n  ServerAliveInterval 30\n' "$VM_HOST" "$VM_USER" > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: Copiar compose, infra e loadtest para a VM
+        run: |
+          ssh vm 'mkdir -p ~/computacao-distribuida'
+          scp -r docker-compose.yml docker-compose.prod.yml infra loadtest vm:~/computacao-distribuida/
+
+      - name: Baixar as imagens do commit e subir os containers
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          IMAGE_OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+          IMAGE_TAG="sha-${GITHUB_SHA::7}"
+          printf '%s' "$GHCR_TOKEN" | ssh vm "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
+          ssh vm "cd ~/computacao-distribuida \
+            && export IMAGE_OWNER='$IMAGE_OWNER' IMAGE_TAG='$IMAGE_TAG' COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml \
+            && docker compose pull \
+            && docker compose up -d --no-build --remove-orphans \
+            && docker image prune -f"
+
+      - name: Teste de fumaça no site publicado
+        run: |
+          for i in $(seq 1 24); do
+            if curl -fsS --max-time 10 -o /dev/null "$SITE_URL/" && curl -fsS --max-time 10 -o /dev/null "$SITE_URL/services"; then
+              echo "OK: $SITE_URL no ar (commit ${GITHUB_SHA::7})"
+              exit 0
+            fi
+            echo "tentativa $i falhou, aguardando..."
+            sleep 5
+          done
+          echo "O site não respondeu após o deploy"
+          exit 1
+
+      - name: Logout do GHCR (VM)
+        if: always()
+        run: ssh vm 'docker logout ghcr.io' || true

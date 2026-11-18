@@ -1,0 +1,49 @@
+# Producao (VM): docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
+# As imagens vem do GHCR (publicadas pelo CI). IMAGE_OWNER e IMAGE_TAG sao definidos pelo job de deploy.
+services:
+  api-gateway:
+    image: ghcr.io/${IMAGE_OWNER:-rabpaulo}/districommerce-api-gateway:${IMAGE_TAG:-latest}
+
+  users-service:
+    image: ghcr.io/${IMAGE_OWNER:-rabpaulo}/districommerce-users-service:${IMAGE_TAG:-latest}
+
+  products-service:
+    image: ghcr.io/${IMAGE_OWNER:-rabpaulo}/districommerce-products-service:${IMAGE_TAG:-latest}
+
+  orders-service:
+    image: ghcr.io/${IMAGE_OWNER:-rabpaulo}/districommerce-orders-service:${IMAGE_TAG:-latest}
+
+  payments-service:
+    image: ghcr.io/${IMAGE_OWNER:-rabpaulo}/districommerce-payments-service:${IMAGE_TAG:-latest}
+
+  logistics-service:
+    image: ghcr.io/${IMAGE_OWNER:-rabpaulo}/districommerce-logistics-service:${IMAGE_TAG:-latest}
+
+  paypal-mock:
+    image: ghcr.io/${IMAGE_OWNER:-rabpaulo}/districommerce-paypal-mock:${IMAGE_TAG:-latest}
+
+  iot-simulator:
+    image: ghcr.io/${IMAGE_OWNER:-rabpaulo}/districommerce-iot-simulator:${IMAGE_TAG:-latest}
+
+  frontend:
+    image: ghcr.io/${IMAGE_OWNER:-rabpaulo}/districommerce-frontend:${IMAGE_TAG:-latest}
+
+  caddy:
+    image: caddy:2
+    container_name: districommerce-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+    networks:
+      - districommerce-network
+
+volumes:
+  caddy_data:
+  caddy_config:
